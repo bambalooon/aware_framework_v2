@@ -5,6 +5,7 @@ import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
 import com.aware.cdm.ContextMapping;
+import com.aware.cdm.ContextRecordCreator;
 import com.aware.utils.Aware_Plugin;
 
 import java.util.ArrayList;
@@ -34,11 +35,14 @@ public class Plugin extends Aware_Plugin {
         ContentResolver contentResolver = getContentResolver();
 
         contentObservers = new ArrayList<>();
-        for (Uri uri : ContextMapping.getInstance().getContextUriList()) {
-            ContentObserver contextObserverWithMemory = ContextObserverWithMemory
-                    .createInstanceLocatedAtEnd(contextChangeHandler, uri, contentResolver);
-            contentResolver.registerContentObserver(uri, true, contextObserverWithMemory);
-            contentObservers.add(contextObserverWithMemory);
+        for (Uri contentUri : ContextMapping.getInstance().getContextUriList()) {
+            ContentObserver contextObserver = new ContextObserver(
+                    contextChangeHandler,
+                    contentUri,
+                    NewRecordsCursorPositioner.createInstancePositionedAtEnd(contentUri, contentResolver),
+                    new ContextRecordCreator());
+            contentResolver.registerContentObserver(contentUri, true, contextObserver);
+            contentObservers.add(contextObserver);
         }
     }
 
