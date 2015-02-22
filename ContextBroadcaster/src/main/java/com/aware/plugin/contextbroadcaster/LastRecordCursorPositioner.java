@@ -7,20 +7,11 @@ import android.net.Uri;
 /**
  * Created by Krzysztof Balon on 2015-02-22.
  */
-public class LastRecordCursorPositioner implements CursorPositioner {
-    private final Uri contentUri;
-    private final ContentResolver contentResolver;
+public class LastRecordCursorPositioner extends AbstractCursorPositioner {
     private int cursorPosition = CURSOR_START_POSITION;
-    private Cursor cursor;
 
     public LastRecordCursorPositioner(Uri contentUri, ContentResolver contentResolver) {
-        this.contentUri = contentUri;
-        this.contentResolver = contentResolver;
-    }
-
-    @Override
-    public void init() {
-        cursor = contentResolver.query(contentUri, null, null, null, null);
+        super(contentUri, contentResolver);
     }
 
     @Override
@@ -28,8 +19,7 @@ public class LastRecordCursorPositioner implements CursorPositioner {
         if (cursor.moveToLast() && cursor.getPosition() > cursorPosition) {
             cursorPosition = cursor.getPosition();
         } else {
-            cursor.close();
-            cursor = null;
+            super.terminate();
         }
         return cursor;
     }

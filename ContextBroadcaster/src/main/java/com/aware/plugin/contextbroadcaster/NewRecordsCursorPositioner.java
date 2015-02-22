@@ -7,7 +7,7 @@ import android.net.Uri;
 /**
  * Created by Krzysztof Balon on 2015-02-22.
  */
-public class NewRecordsCursorPositioner implements CursorPositioner {
+public class NewRecordsCursorPositioner extends AbstractCursorPositioner {
     public static NewRecordsCursorPositioner createInstancePositionedAtStart(Uri contentUri, ContentResolver contentResolver) {
         return new NewRecordsCursorPositioner(contentUri, contentResolver);
     }
@@ -19,14 +19,10 @@ public class NewRecordsCursorPositioner implements CursorPositioner {
         return new NewRecordsCursorPositioner(contentUri, contentResolver, lastRecordPosition);
     }
 
-    private final Uri contentUri;
-    private final ContentResolver contentResolver;
     private int cursorPosition;
-    private Cursor cursor;
 
     public NewRecordsCursorPositioner(Uri contentUri, ContentResolver contentResolver, int cursorPosition) {
-        this.contentUri = contentUri;
-        this.contentResolver = contentResolver;
+        super(contentUri, contentResolver);
         this.cursorPosition = cursorPosition;
     }
 
@@ -36,7 +32,7 @@ public class NewRecordsCursorPositioner implements CursorPositioner {
 
     @Override
     public void init() {
-        cursor = contentResolver.query(contentUri, null, null, null, null);
+        super.init();
         cursor.moveToPosition(cursorPosition);
     }
 
@@ -45,8 +41,7 @@ public class NewRecordsCursorPositioner implements CursorPositioner {
         if (cursor.moveToNext()) {
             cursorPosition = cursor.getPosition();
         } else {
-            cursor.close();
-            cursor = null;
+            super.terminate();
         }
         return cursor;
     }
