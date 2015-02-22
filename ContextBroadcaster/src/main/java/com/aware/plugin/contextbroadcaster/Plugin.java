@@ -1,13 +1,19 @@
 package com.aware.plugin.contextbroadcaster;
 
+import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
+import android.util.Log;
 import com.aware.cdm.ContextMapping;
 import com.aware.cdm.ContextRecordCreator;
+import com.aware.cdm.processor.ContextRecordProcessor;
 import com.aware.cdm.processor.ContextUpdateBroadcaster;
+import com.aware.cdm.receiver.ContextUpdateReceiver;
+import com.aware.cdm.record.ContextRecord;
 import com.aware.plugin.contextbroadcaster.positioner.NewRecordsCursorPositioner;
 import com.aware.utils.Aware_Plugin;
 
@@ -18,16 +24,14 @@ import java.util.List;
  * Created by Krzysztof Balon on 2015-02-20.
  */
 public class Plugin extends Aware_Plugin {
-    private static final String POIRECOMMENDER_PLUGIN = "POIRECOMMENDER_PLUGIN";
-
+    private static final String TAG = "AWARE::ContextBroadcaster";
     private final Handler contextChangeHandler = new Handler();
     private List<ContentObserver> contentObservers;
+    private BroadcastReceiver broadcastReceiver;
 
     @Override
     public void onCreate() {
         super.onCreate();
-
-        TAG = POIRECOMMENDER_PLUGIN;
         CONTEXT_PRODUCER = new ContextProducer() {
             @Override
             public void onContext() {
@@ -49,6 +53,14 @@ public class Plugin extends Aware_Plugin {
             contentResolver.registerContentObserver(contentUri, true, contextObserver);
             contentObservers.add(contextObserver);
         }
+
+        broadcastReceiver = new ContextUpdateReceiver(new ContextRecordProcessor() {
+            @Override
+            public void process(ContextRecord contextRecord) {
+                Log.d(TAG, contextRecord.toString());
+            }
+        });
+        registerReceiver(broadcastReceiver, new IntentFilter(ContextUpdateBroadcaster.ACTION_AWARE_CONTEXT_UPDATE));
     }
 
     @Override
@@ -58,5 +70,6 @@ public class Plugin extends Aware_Plugin {
             getContentResolver().unregisterContentObserver(contentObserver);
         }
         contentObservers = null;
+        unregisterReceiver(broadcastReceiver);
     }
 }
