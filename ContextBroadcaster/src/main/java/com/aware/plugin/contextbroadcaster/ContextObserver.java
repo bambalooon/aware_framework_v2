@@ -27,6 +27,7 @@ public class ContextObserver extends ContentObserver {
 
     @Override
     public void onChange(boolean selfChange) {
+        super.onChange(selfChange);
         Cursor cursor = contentResolver.query(contentUri, null, null, null, null);
 
         if(cursor.moveToLast()) {

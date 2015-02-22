@@ -1,6 +1,7 @@
 package com.aware.plugin.contextbroadcaster;
 
 import android.content.ContentResolver;
+import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
 import com.aware.cdm.ContextMapping;
@@ -16,7 +17,7 @@ public class Plugin extends Aware_Plugin {
     private static final String POIRECOMMENDER_PLUGIN = "POIRECOMMENDER_PLUGIN";
 
     private final Handler contextChangeHandler = new Handler();
-    private List<ContextObserver> contextObservers;
+    private List<ContentObserver> contentObservers;
 
     @Override
     public void onCreate() {
@@ -32,21 +33,21 @@ public class Plugin extends Aware_Plugin {
 
         ContentResolver contentResolver = getContentResolver();
 
-        contextObservers = new ArrayList<>();
+        contentObservers = new ArrayList<>();
         for (Uri uri : ContextMapping.getInstance().getContextUriList()) {
-            ContextObserver contextObserver = new ContextObserver(contextChangeHandler, uri, contentResolver);
-            contentResolver.registerContentObserver(uri, true, contextObserver);
-            contextObservers.add(contextObserver);
+            ContentObserver contextObserverWithMemory = ContextObserverWithMemory
+                    .createInstanceLocatedAtEnd(contextChangeHandler, uri, contentResolver);
+            contentResolver.registerContentObserver(uri, true, contextObserverWithMemory);
+            contentObservers.add(contextObserverWithMemory);
         }
-
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-        for (ContextObserver contextObserver : contextObservers) {
-            getContentResolver().unregisterContentObserver(contextObserver);
+        for (ContentObserver contentObserver : contentObservers) {
+            getContentResolver().unregisterContentObserver(contentObserver);
         }
-        contextObservers = null;
+        contentObservers = null;
     }
 }
