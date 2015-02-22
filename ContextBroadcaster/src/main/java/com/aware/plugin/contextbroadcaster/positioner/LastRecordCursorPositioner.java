@@ -1,4 +1,4 @@
-package com.aware.plugin.contextbroadcaster;
+package com.aware.plugin.contextbroadcaster.positioner;
 
 import android.content.ContentResolver;
 import android.database.Cursor;
