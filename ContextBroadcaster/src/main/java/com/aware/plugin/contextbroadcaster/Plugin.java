@@ -1,6 +1,7 @@
 package com.aware.plugin.contextbroadcaster;
 
 import android.content.ContentResolver;
+import android.content.Context;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
@@ -33,6 +34,7 @@ public class Plugin extends Aware_Plugin {
         };
 
         ContentResolver contentResolver = getContentResolver();
+        Context applicationContext = getApplicationContext();
 
         contentObservers = new ArrayList<>();
         for (Uri contentUri : ContextMapping.getInstance().getContextUriList()) {
@@ -40,7 +42,8 @@ public class Plugin extends Aware_Plugin {
                     contextChangeHandler,
                     contentUri,
                     NewRecordsCursorPositioner.createInstancePositionedAtEnd(contentUri, contentResolver),
-                    new ContextRecordCreator());
+                    new ContextRecordCreator(),
+                    new ContextUpdateBroadcaster(applicationContext));
             contentResolver.registerContentObserver(contentUri, true, contextObserver);
             contentObservers.add(contextObserver);
         }

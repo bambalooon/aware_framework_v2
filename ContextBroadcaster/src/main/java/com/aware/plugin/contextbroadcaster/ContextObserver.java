@@ -17,12 +17,14 @@ public class ContextObserver extends ContentObserver {
     private final Uri contentUri;
     private final CursorPositioner cursorPositioner;
     private final ContextRecordCreator contextRecordCreator;
+    private final ContextUpdateBroadcaster contextUpdateBroadcaster;
 
-    public ContextObserver(Handler handler, Uri contentUri, CursorPositioner cursorPositioner, ContextRecordCreator contextRecordCreator) {
+    public ContextObserver(Handler handler, Uri contentUri, CursorPositioner cursorPositioner, ContextRecordCreator contextRecordCreator, ContextUpdateBroadcaster contextUpdateBroadcaster) {
         super(handler);
         this.contentUri = contentUri;
         this.cursorPositioner = cursorPositioner;
         this.contextRecordCreator = contextRecordCreator;
+        this.contextUpdateBroadcaster = contextUpdateBroadcaster;
     }
 
     @Override
@@ -33,6 +35,7 @@ public class ContextObserver extends ContentObserver {
         Cursor cursor;
         while ((cursor = cursorPositioner.moveToNext()) != null) {
             ContextRecord contextRecord = contextRecordCreator.createContextRecord(contentUri, cursor);
+            contextUpdateBroadcaster.broadcast(contextRecord);
             Log.d(TAG, contextRecord.toString());
         }
     }
