@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Handler;
 import com.aware.cdm.ContextMapping;
 import com.aware.cdm.ContextRecordCreator;
+import com.aware.cdm.processor.ContextUpdateBroadcaster;
 import com.aware.plugin.contextbroadcaster.positioner.NewRecordsCursorPositioner;
 import com.aware.utils.Aware_Plugin;
 

@@ -1,8 +1,7 @@
-package com.aware.plugin.contextbroadcaster;
+package com.aware.cdm.processor;
 
 import android.content.Context;
 import android.content.Intent;
-import com.aware.cdm.processor.ContextRecordProcessor;
 import com.aware.cdm.record.ContextRecord;
 
 /**

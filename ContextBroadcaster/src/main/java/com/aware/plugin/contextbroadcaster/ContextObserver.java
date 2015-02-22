@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.util.Log;
 import com.aware.cdm.ContextRecordCreator;
 import com.aware.cdm.processor.ContextRecordProcessor;
+import com.aware.cdm.processor.ContextUpdateBroadcaster;
 import com.aware.cdm.record.ContextRecord;
 import com.aware.plugin.contextbroadcaster.positioner.CursorPositioner;
 
