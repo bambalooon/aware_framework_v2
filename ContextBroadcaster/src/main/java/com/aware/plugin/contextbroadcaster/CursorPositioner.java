@@ -6,6 +6,7 @@ import android.database.Cursor;
  * Created by Krzysztof Balon on 2015-02-22.
  */
 public interface CursorPositioner {
+    int CURSOR_START_POSITION = -1;
     /**
      * Method initializes positioner with new records
      */

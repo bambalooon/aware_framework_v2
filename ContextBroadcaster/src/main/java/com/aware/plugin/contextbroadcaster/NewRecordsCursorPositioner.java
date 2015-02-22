@@ -8,8 +8,6 @@ import android.net.Uri;
  * Created by Krzysztof Balon on 2015-02-22.
  */
 public class NewRecordsCursorPositioner implements CursorPositioner {
-    private static final int CURSOR_START_POSITION = -1;
-
     public static NewRecordsCursorPositioner createInstancePositionedAtStart(Uri contentUri, ContentResolver contentResolver) {
         return new NewRecordsCursorPositioner(contentUri, contentResolver);
     }
