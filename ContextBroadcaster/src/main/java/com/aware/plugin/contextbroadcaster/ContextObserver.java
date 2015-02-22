@@ -28,7 +28,7 @@ public class ContextObserver extends ContentObserver {
     @Override
     public void onChange(boolean selfChange) {
         super.onChange(selfChange);
-        cursorPositioner.init();
+        cursorPositioner.initialize();
 
         Cursor cursor;
         while ((cursor = cursorPositioner.moveToNext()) != null) {

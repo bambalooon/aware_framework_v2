@@ -31,8 +31,8 @@ public class NewRecordsCursorPositioner extends AbstractCursorPositioner {
     }
 
     @Override
-    public void init() {
-        super.init();
+    public void initialize() {
+        super.initialize();
         cursor.moveToPosition(cursorPosition);
     }
 

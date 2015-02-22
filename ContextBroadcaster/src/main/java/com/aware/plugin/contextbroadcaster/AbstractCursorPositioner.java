@@ -22,7 +22,7 @@ public abstract class AbstractCursorPositioner implements CursorPositioner {
     /**
      * Method initializes positioner with new records
      */
-    public void init() {
+    public void initialize() {
         cursor = contentResolver.query(contentUri, null, null, null, null);
     }
 

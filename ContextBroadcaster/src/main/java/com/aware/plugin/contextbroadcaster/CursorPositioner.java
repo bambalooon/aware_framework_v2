@@ -10,7 +10,7 @@ public interface CursorPositioner {
     /**
      * Method initializes positioner with new records
      */
-    void init();
+    void initialize();
 
     /**
      * @return Cursor located at one of records or null if there is none anymore (cursor closed when null returned)
