@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.util.Log;
 import com.aware.cdm.ContextRecordCreator;
+import com.aware.cdm.processor.ContextRecordProcessor;
 import com.aware.cdm.record.ContextRecord;
 import com.aware.plugin.contextbroadcaster.positioner.CursorPositioner;
 
@@ -18,14 +19,14 @@ public class ContextObserver extends ContentObserver {
     private final Uri contentUri;
     private final CursorPositioner cursorPositioner;
     private final ContextRecordCreator contextRecordCreator;
-    private final ContextUpdateBroadcaster contextUpdateBroadcaster;
+    private final ContextRecordProcessor contextRecordProcessor;
 
-    public ContextObserver(Handler handler, Uri contentUri, CursorPositioner cursorPositioner, ContextRecordCreator contextRecordCreator, ContextUpdateBroadcaster contextUpdateBroadcaster) {
+    public ContextObserver(Handler handler, Uri contentUri, CursorPositioner cursorPositioner, ContextRecordCreator contextRecordCreator, ContextUpdateBroadcaster contextRecordProcessor) {
         super(handler);
         this.contentUri = contentUri;
         this.cursorPositioner = cursorPositioner;
         this.contextRecordCreator = contextRecordCreator;
-        this.contextUpdateBroadcaster = contextUpdateBroadcaster;
+        this.contextRecordProcessor = contextRecordProcessor;
     }
 
     @Override
@@ -36,7 +37,7 @@ public class ContextObserver extends ContentObserver {
         Cursor cursor;
         while ((cursor = cursorPositioner.moveToNext()) != null) {
             ContextRecord contextRecord = contextRecordCreator.createContextRecord(contentUri, cursor);
-            contextUpdateBroadcaster.broadcast(contextRecord);
+            contextRecordProcessor.process(contextRecord);
             Log.d(TAG, contextRecord.toString());
         }
     }
