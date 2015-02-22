@@ -22,7 +22,7 @@ public class ContextObserverWithMemory extends ContentObserver {
 
     public static ContextObserverWithMemory createInstanceLocatedAtEnd(Handler handler, Uri contentUri, ContentResolver contentResolver) {
         Cursor cursor = contentResolver.query(contentUri, null, null, null, null);
-        int initialPosition = cursor.getCount();
+        int initialPosition = cursor.getCount() - 1;
         cursor.close();
         return new ContextObserverWithMemory(handler, contentUri, contentResolver, initialPosition);
     }
