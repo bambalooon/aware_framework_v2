@@ -2,8 +2,10 @@ package com.aware.cdm;
 
 import android.net.Uri;
 import com.aware.cdm.factory.ContextRecordFactory;
+import com.aware.cdm.factory.LocationsDataRecordFactory;
 import com.aware.cdm.factory.WifiDataRecordFactory;
 import com.aware.cdm.factory.WifiSensorRecordFactory;
+import com.aware.providers.Locations_Provider;
 import com.aware.providers.WiFi_Provider;
 import com.google.common.collect.ImmutableMap;
 
@@ -18,6 +20,7 @@ public class ContextMapping {
     public static ContextMapping getInstance() {
         if (INSTANCE == null) {
             INSTANCE = new ContextMapping(ImmutableMap.<Uri, ContextRecordFactory>builder()
+                    .put(Locations_Provider.Locations_Data.CONTENT_URI, new LocationsDataRecordFactory())
                     .put(WiFi_Provider.WiFi_Sensor.CONTENT_URI, new WifiSensorRecordFactory())
                     .put(WiFi_Provider.WiFi_Data.CONTENT_URI, new WifiDataRecordFactory())
                     .build());
