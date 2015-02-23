@@ -1,1 +1,1 @@
-include ':AwareFramework', ':AwareFrameworkCDM', ':ContextBroadcaster'
+include ':AwareFramework', ':AwareFrameworkCDM', ':ContextBroadcaster', ':Google_ActivityRecognition'
