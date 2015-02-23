@@ -1,13 +1,11 @@
 package com.aware.plugin.contextbroadcaster;
 
-import android.content.BroadcastReceiver;
-import android.content.ContentResolver;
-import android.content.Context;
-import android.content.IntentFilter;
+import android.content.*;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
 import android.util.Log;
+import com.aware.Aware;
 import com.aware.cdm.ContextMapping;
 import com.aware.cdm.ContextRecordCreator;
 import com.aware.cdm.processor.ContextRecordProcessor;
@@ -38,6 +36,10 @@ public class Plugin extends Aware_Plugin {
                 //do nothing
             }
         };
+
+        Aware.setSetting(getApplicationContext(), Settings.STATUS_PLUGIN_CONTEXT_BROADCASTER, true);
+        Intent refresh = new Intent(Aware.ACTION_AWARE_REFRESH);
+        sendBroadcast(refresh);
 
         ContentResolver contentResolver = getContentResolver();
         Context applicationContext = getApplicationContext();
@@ -71,5 +73,9 @@ public class Plugin extends Aware_Plugin {
         }
         contentObservers = null;
         unregisterReceiver(broadcastReceiver);
+
+        Aware.setSetting(getApplicationContext(), Settings.STATUS_PLUGIN_CONTEXT_BROADCASTER, false);
+        Intent refresh = new Intent(Aware.ACTION_AWARE_REFRESH);
+        sendBroadcast(refresh);
     }
 }
