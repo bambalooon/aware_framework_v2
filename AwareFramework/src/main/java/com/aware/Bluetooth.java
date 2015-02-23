@@ -96,9 +96,9 @@ public class Bluetooth extends Aware_Sensor {
 		super.onCreate();
 		
 		alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-		TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+		TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
 		
-		UPDATE_BLUETOOTH_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_bluetooth"));
+		UPDATE_BLUETOOTH_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_BLUETOOTH));
         
 		if( bluetoothAdapter == null ) {
 		    if(Aware.DEBUG) Log.w(TAG,"No bluetooth is detected on this device");
@@ -134,12 +134,10 @@ public class Bluetooth extends Aware_Sensor {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         
-        if( Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_bluetooth")) != UPDATE_BLUETOOTH_INTERVAL ) {
-            
-            UPDATE_BLUETOOTH_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_bluetooth"));
-            
+        if( Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BLUETOOTH)) != UPDATE_BLUETOOTH_INTERVAL ) {
+            UPDATE_BLUETOOTH_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_BLUETOOTH));
             if( ! bluetoothAdapter.isEnabled() ) {
                 Intent makeEnabled = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                 makeEnabled.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);
@@ -205,7 +203,7 @@ public class Bluetooth extends Aware_Sensor {
                 Short btDeviceRSSI = extras.getShort(BluetoothDevice.EXTRA_RSSI);
                 
                 ContentValues rowData = new ContentValues();
-                rowData.put(Bluetooth_Data.DEVICE_ID, Aware.getSetting(context.getContentResolver(),"device_id"));
+                rowData.put(Bluetooth_Data.DEVICE_ID, Aware.getSetting(context,Aware_Preferences.DEVICE_ID));
                 rowData.put(Bluetooth_Data.TIMESTAMP, scanTimestamp);
                 rowData.put(Bluetooth_Data.BT_ADDRESS, btDevice.getAddress());
                 rowData.put(Bluetooth_Data.BT_NAME, btDevice.getName());
@@ -259,7 +257,7 @@ public class Bluetooth extends Aware_Sensor {
         } else {
             ContentValues rowData = new ContentValues();
             rowData.put(Bluetooth_Sensor.TIMESTAMP, System.currentTimeMillis());
-            rowData.put(Bluetooth_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(), "device_id"));
+            rowData.put(Bluetooth_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
             rowData.put(Bluetooth_Sensor.BT_ADDRESS, btAdapter.getAddress());
             rowData.put(Bluetooth_Sensor.BT_NAME, btAdapter.getName());
             

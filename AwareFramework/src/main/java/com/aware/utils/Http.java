@@ -33,6 +33,7 @@ import com.aware.Aware;
  * @author denzil
  */
 public class Http {
+	
 	/**
 	 * Logging tag (default = "AWARE")
 	 */
@@ -46,16 +47,17 @@ public class Http {
 	 */
 	public HttpResponse dataPOST(String url, ArrayList<NameValuePair> data) {
 		try{
-		    HttpClient httpClient = new DefaultHttpClient();
+			HttpClient httpClient = new DefaultHttpClient();
 			HttpPost httpPost = new HttpPost(url);
-			httpPost.setEntity(new UrlEncodedFormEntity(data));		
+			httpPost.setEntity(new UrlEncodedFormEntity(data));
 			HttpResponse httpResponse = httpClient.execute(httpPost);
-			
-			if(Aware.DEBUG) {
-				int statusCode = httpResponse.getStatusLine().getStatusCode();
-				Log.d(TAG, "Status: " + statusCode );
-				if (statusCode != 200 ) {
-					Log.d(TAG, EntityUtils.toString(httpResponse.getEntity()) );
+		
+			int statusCode = httpResponse.getStatusLine().getStatusCode();
+			if (statusCode != 200 ) {
+				if(Aware.DEBUG) {
+					Log.d(TAG, "Status: " + statusCode );
+					Log.e(TAG, "URL:" + url);
+					Log.e(TAG, EntityUtils.toString(httpResponse.getEntity()) );
 				}
 			}
 			return httpResponse;
@@ -66,6 +68,9 @@ public class Http {
 			Log.e(TAG,e.getMessage());
 			return null;
 		} catch (IOException e) {
+			Log.e(TAG,e.getMessage());
+			return null;
+		} catch (IllegalStateException e ) {
 			Log.e(TAG,e.getMessage());
 			return null;
 		}
@@ -82,8 +87,14 @@ public class Http {
 			HttpGet httpGet = new HttpGet(url);
 			HttpResponse httpResponse = httpClient.execute(httpGet);
 			
-			if(Aware.DEBUG) Log.d(TAG, "Status: "+httpResponse.getStatusLine().getStatusCode());
-			
+			int statusCode = httpResponse.getStatusLine().getStatusCode();
+			if( statusCode != 200 ) {
+				if(Aware.DEBUG) {
+					Log.d(TAG, "Status: "+ statusCode);
+					Log.e(TAG,"URL:" + url);
+					Log.e(TAG,EntityUtils.toString(httpResponse.getEntity()));
+				}
+			}
 			return httpResponse;
 		} catch (ClientProtocolException e) {
 			if(Aware.DEBUG) Log.e(TAG,e.getMessage());

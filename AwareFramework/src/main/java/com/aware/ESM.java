@@ -15,6 +15,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import android.app.IntentService;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -26,9 +28,9 @@ import android.database.sqlite.SQLiteException;
 import android.net.Uri;
 import android.os.Binder;
 import android.os.IBinder;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
-import com.aware.providers.Applications_Provider.Applications_Foreground;
 import com.aware.providers.ESM_Provider;
 import com.aware.providers.ESM_Provider.ESM_Data;
 import com.aware.ui.ESM_Queue;
@@ -101,6 +103,16 @@ public class ESM extends Aware_Sensor {
     public static final int STATUS_EXPIRED = 3;
     
     /**
+     * ESM status: esm is visible to the user
+     */
+    public static final int STATUS_VISIBLE = 4;
+    
+    /**
+     * ESM status: this is a scheduled ESM
+     */
+    public static final int STATUS_SCHEDULED = 5;
+    
+    /**
      * ESM Dialog with free text <br/>
      * Example: [{'esm':{'esm_type':1,'esm_title':'ESM Freetext','esm_instructions':'The user can answer an open ended question.','esm_submit':'Next','esm_expiration_threashold':20,'esm_trigger':'esm trigger example'}}]
      */
@@ -145,11 +157,16 @@ public class ESM extends Aware_Sensor {
      */
     public static final String EXTRA_ESM = "esm";
     
+    private static final int ESM_NOTIFICATION_ID = 777;
+    
+    private static Intent intent_ESM = null;
+    private static PendingIntent pending_ESM = null;
+    
     @Override
     public void onCreate() {
         super.onCreate();
         
-        TAG = Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         
         DATABASE_TABLES = ESM_Provider.DATABASE_TABLES;
     	TABLES_FIELDS = ESM_Provider.TABLES_FIELDS;
@@ -157,8 +174,11 @@ public class ESM extends Aware_Sensor {
         
         IntentFilter filter = new IntentFilter();
         filter.addAction(ESM.ACTION_AWARE_QUEUE_ESM);
-        filter.addAction(Applications.ACTION_AWARE_APPLICATIONS_FOREGROUND);
         registerReceiver(esmMonitor, filter);
+        
+        intent_ESM = new Intent(this, ESM_Queue.class);
+        intent_ESM.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        pending_ESM = PendingIntent.getActivity(this, 0, intent_ESM, PendingIntent.FLAG_UPDATE_CURRENT);
         
         if(Aware.DEBUG) Log.d(TAG,"ESM service created!");
     }
@@ -175,9 +195,12 @@ public class ESM extends Aware_Sensor {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+        if(Aware.DEBUG) Log.d(TAG,"ESM service active... Queue = " + ESM_Queue.getQueueSize(getApplicationContext()));
         
-        if(Aware.DEBUG) Log.d(TAG,"ESM service active...");
+        if( ESM_Queue.getQueueSize(this) > 0 && Aware.getSetting(this, Aware_Preferences.STATUS_ESM).equals("true") ) {
+        	startActivity(intent_ESM);
+        }
         
         return START_STICKY;
     }
@@ -208,60 +231,24 @@ public class ESM extends Aware_Sensor {
     
     /**
      * BroadcastReceiver for ESM module <br/>
-     * - Upload data to remote webservice: ACTION_AWARE_WEBSERVICE<br/>
-     * - Clean database on the device: ACTION_AWARE_CLEAN_DATABASES<br/>
      * - Queue ESM: ACTION_AWARE_QUEUE_ESM<br/>
-     * - Check if ESM Queue has been interrupted
      * @author df
-     *
      */
     public static class ESMMonitor extends BroadcastReceiver {
-        private Context context = null;
-    	
-    	@Override
+        @Override
         public void onReceive(Context context, Intent intent) {
-            this.context = context;
-            
-            if( intent.getAction().equals(ESM.ACTION_AWARE_QUEUE_ESM)) {
-                Intent backgroundService = new Intent(context, BackgroundService.class);
+            if( intent.getAction().equals(ESM.ACTION_AWARE_QUEUE_ESM) && Aware.getSetting(context, Aware_Preferences.STATUS_ESM).equals("true") ) {
+            	Intent backgroundService = new Intent(context, BackgroundService.class);
                 backgroundService.setAction(ESM.ACTION_AWARE_QUEUE_ESM);
                 backgroundService.putExtra(EXTRA_ESM, intent.getStringExtra("esm"));
                 context.startService(backgroundService);
             }
-            if( intent.getAction().equals(Applications.ACTION_AWARE_APPLICATIONS_FOREGROUND)) {
-            	Cursor foreground = context.getContentResolver().query(Applications_Foreground.CONTENT_URI, null, null, null, Applications_Foreground.TIMESTAMP + " DESC LIMIT 1");
-    			if( foreground != null && foreground.moveToFirst() ) {
-    				String package_name = foreground.getString(foreground.getColumnIndex(Applications_Foreground.PACKAGE_NAME));
-    				if( ! package_name.equals("com.aware") && getQueueSize() > 0 ) {
-    					Intent displayESM = new Intent(context, ESM_Queue.class);
-                        displayESM.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-                        displayESM.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        displayESM.addFlags(Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);
-                        displayESM.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                        displayESM.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                        context.startActivity(displayESM);
-    				}
-    			}
-    			if(foreground != null && ! foreground.isClosed() ) foreground.close();
-            }
-        }
-        
-        private int getQueueSize() {
-            int size = 0;
-            Cursor onqueue = context.getContentResolver().query(ESM_Data.CONTENT_URI,null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, null);
-            if( onqueue != null & onqueue.moveToFirst() ) {
-                size = onqueue.getCount();
-            }
-            if( onqueue != null && ! onqueue.isClosed() ) onqueue.close();
-            return size;
         }
     }
     private static final ESMMonitor esmMonitor = new ESMMonitor();
     
     /**
      * ESM background service
-     * - Backup data to webservice HTTP
-     * - Clean database
      * - Queue ESM received to the local database
      * @author df
      *
@@ -278,13 +265,14 @@ public class ESM extends Aware_Sensor {
                     JSONArray esms = new JSONArray(intent.getStringExtra(EXTRA_ESM));
                     
                     long esm_timestamp = System.currentTimeMillis();
+                    boolean is_persistent = false;
                     
                     for( int i = 0; i<esms.length(); i++ ) {
                         JSONObject esm = esms.getJSONObject(i).getJSONObject(EXTRA_ESM);
                         
                         ContentValues rowData = new ContentValues();
                         rowData.put(ESM_Data.TIMESTAMP, esm_timestamp);
-                        rowData.put(ESM_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+                        rowData.put(ESM_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
                         rowData.put(ESM_Data.TYPE, esm.optInt(ESM_Data.TYPE));
                         rowData.put(ESM_Data.TITLE, esm.optString(ESM_Data.TITLE));
                         rowData.put(ESM_Data.SUBMIT, esm.optString(ESM_Data.SUBMIT));
@@ -297,8 +285,16 @@ public class ESM extends Aware_Sensor {
                         rowData.put(ESM_Data.LIKERT_STEP, esm.optDouble(ESM_Data.LIKERT_STEP,0));
                         rowData.put(ESM_Data.QUICK_ANSWERS, esm.optString(ESM_Data.QUICK_ANSWERS));
                         rowData.put(ESM_Data.EXPIRATION_THREASHOLD, esm.optInt(ESM_Data.EXPIRATION_THREASHOLD));
+                        
+                        //TODO: scheduling of ESMs. depending if there is a schedule for it, this status is NEW or SCHEDULED
+                        //If NEW, it is shown immediately, otherwise it is not.
+                        
                         rowData.put(ESM_Data.STATUS, ESM.STATUS_NEW);
                         rowData.put(ESM_Data.TRIGGER, esm.optString(ESM_Data.TRIGGER));
+                        
+                        if( rowData.getAsInteger(ESM_Data.EXPIRATION_THREASHOLD) == 0 ) {
+                            is_persistent = true;
+                        }
                         
                         try {
                             getContentResolver().insert(ESM_Data.CONTENT_URI, rowData);
@@ -311,18 +307,37 @@ public class ESM extends Aware_Sensor {
                         }
                     }
                     
-                    Intent displayESM = new Intent(getApplicationContext(), ESM_Queue.class);
-                    displayESM.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-                    displayESM.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                    displayESM.addFlags(Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT);
-                    displayESM.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                    displayESM.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
-                    startActivity(displayESM);
-                    
+                    if ( is_persistent ) {
+                        NotificationManager mNotificationManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                        mNotificationManager.notify(ESM_NOTIFICATION_ID, esmWaiting().build());
+                    } else {
+                        startActivity(intent_ESM);
+                    }
                 } catch (JSONException e) {
-                    e.printStackTrace();
+                    e.printStackTrace();                    
                 };
             }
+        }
+        
+        private NotificationCompat.Builder esmWaiting() {
+            //Get the number of ESM's waiting to be answered
+            int esm_count = 0;
+            Cursor esm_waiting = getContentResolver().query(ESM_Data.CONTENT_URI, null, ESM_Data.STATUS +"="+ ESM.STATUS_NEW, null, null);
+            if( esm_waiting != null && esm_waiting.moveToFirst() ) {
+                esm_count = esm_waiting.getCount();
+            }
+            if( esm_waiting != null && ! esm_waiting.isClosed() ) esm_waiting.close();
+            
+            NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(this);
+            mBuilder.setSmallIcon(R.drawable.ic_stat_aware_esm);
+            mBuilder.setContentTitle("AWARE");
+            mBuilder.setContentText(getResources().getText(R.string.aware_esm_questions));
+            mBuilder.setNumber(esm_count);
+            mBuilder.setAutoCancel(true);
+            mBuilder.setOnlyAlertOnce(true);
+            mBuilder.setOngoing(true);
+            mBuilder.setContentIntent(pending_ESM);
+            return mBuilder;
         }
     }
 }

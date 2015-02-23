@@ -11,7 +11,6 @@ See the GNU General Public License for more details: http://www.gnu.org/licenses
 package com.aware.ui;
 
 import android.content.BroadcastReceiver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -21,10 +20,12 @@ import android.os.PowerManager;
 import android.os.Vibrator;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
 import android.util.Log;
 import android.view.WindowManager;
 
 import com.aware.Aware;
+import com.aware.Aware_Preferences;
 import com.aware.ESM;
 import com.aware.providers.ESM_Provider.ESM_Data;
 
@@ -37,18 +38,26 @@ public class ESM_Queue extends FragmentActivity {
     private static String TAG = "AWARE::ESM Queue";
     private final ESM_QueueManager queue_manager = new ESM_QueueManager();
     
-    private PowerManager powerManager = null;
-    private Vibrator vibrator = null;
+    private static FragmentManager fragmentManager;
+    private static PowerManager powerManager;
+    private static Vibrator vibrator;
+    private static ESM_Queue queue;
     
     @Override
     protected void onCreate(Bundle bundle) {
         super.onCreate(bundle);
-        getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+       
+        queue = this;
+        getWindow().setType(WindowManager.LayoutParams.TYPE_PRIORITY_PHONE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         
         powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        fragmentManager = (FragmentManager) getSupportFragmentManager();
 		
         IntentFilter filter = new IntentFilter();
         filter.addAction(ESM.ACTION_AWARE_ESM_ANSWERED);
@@ -56,36 +65,31 @@ public class ESM_Queue extends FragmentActivity {
         filter.addAction(ESM.ACTION_AWARE_ESM_EXPIRED);
         registerReceiver(queue_manager, filter);
         
-        if( getQueueSize() > 0 ) {
-        	Intent queue_started = new Intent(ESM.ACTION_AWARE_ESM_QUEUE_STARTED);
-            sendBroadcast(queue_started);
-            
-			DialogFragment esm = new ESM_UI();
-			esm.show(getSupportFragmentManager(), TAG);
-			
-			if( ! powerManager.isScreenOn() ) {
-	            vibrator.vibrate(777);
-	        }
-		} else {
-			finish();
-		}
+        Intent queue_started = new Intent(ESM.ACTION_AWARE_ESM_QUEUE_STARTED);
+        sendBroadcast(queue_started);
+        
+        if( getQueueSize(getApplicationContext()) > 0 ) {
+            DialogFragment esm = new ESM_UI();
+            esm.show(fragmentManager, TAG);
+            if( ! powerManager.isScreenOn() ) {
+                vibrator.vibrate(777);
+            }
+        }
     }
     
-    public class ESM_QueueManager extends BroadcastReceiver {
+    public static class ESM_QueueManager extends BroadcastReceiver {
     	@Override
     	public void onReceive(Context context, Intent intent) {
-    		if(intent.getAction().equals(ESM.ACTION_AWARE_ESM_ANSWERED) 
-			   || intent.getAction().equals(ESM.ACTION_AWARE_ESM_DISMISSED) 
-			   || intent.getAction().equals(ESM.ACTION_AWARE_ESM_EXPIRED) ) {
-    			if( getQueueSize() > 0 ) {
+    		if( intent.getAction().equals(ESM.ACTION_AWARE_ESM_ANSWERED) || intent.getAction().equals(ESM.ACTION_AWARE_ESM_DISMISSED) || intent.getAction().equals(ESM.ACTION_AWARE_ESM_EXPIRED) ) {
+    			if( getQueueSize(context) > 0 ) {
     				DialogFragment esm = new ESM_UI();
-    				esm.show(getSupportFragmentManager(), "TAG");
-    				
-    				if( ! powerManager.isScreenOn() ) {
-    		            vibrator.vibrate(777);
-    		        }
-    			} else {
-    				finish();
+    	            esm.show(fragmentManager, TAG);
+    			} 
+    			if( getQueueSize(context) == 0 ) {
+    				if(Aware.DEBUG) Log.d(TAG,"ESM Queue is done!");
+    	            Intent esm_done = new Intent(ESM.ACTION_AWARE_ESM_QUEUE_COMPLETE);
+    	            context.sendBroadcast(esm_done);
+    	            queue.finish();
     			}
     		}
     	}
@@ -94,34 +98,16 @@ public class ESM_Queue extends FragmentActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        
         unregisterReceiver(queue_manager);
-        
-        if(Aware.DEBUG) Log.d(TAG,"ESM Queue is done!");
-        
-        //The user pressed the HOME button... queue got destroyed, so lets set previous queue as dismissed
-        if( getQueueSize() > 0 ) {
-        	Cursor onqueue = getContentResolver().query(ESM_Data.CONTENT_URI,null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, null);
-            if( onqueue != null & onqueue.moveToFirst() ) {
-                ContentValues rowData = new ContentValues();
-                rowData.put(ESM_Data.ANSWER_TIMESTAMP, System.currentTimeMillis());
-                rowData.put(ESM_Data.STATUS, ESM.STATUS_DISMISSED );
-                getContentResolver().update(ESM_Data.CONTENT_URI, rowData, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null);
-            }
-            if( onqueue != null && ! onqueue.isClosed() ) onqueue.close();
-        }
-        
-        Intent esm_done = new Intent(ESM.ACTION_AWARE_ESM_QUEUE_COMPLETE);
-        sendBroadcast(esm_done);
     }
     
     /**
      * Get amount of ESMs waiting on database
      * @return int count
      */
-    private int getQueueSize() {
+    public static int getQueueSize(Context c) {
         int size = 0;
-        Cursor onqueue = getContentResolver().query(ESM_Data.CONTENT_URI,null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, null);
+        Cursor onqueue = c.getContentResolver().query(ESM_Data.CONTENT_URI,null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, null);
         if( onqueue != null & onqueue.moveToFirst() ) {
             size = onqueue.getCount();
         }

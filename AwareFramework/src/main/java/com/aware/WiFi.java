@@ -95,46 +95,41 @@ public class WiFi extends Aware_Sensor {
 		alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
 		wifiManager = (WifiManager) getSystemService(WIFI_SERVICE);
 		
-		TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+		TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
 		
-		UPDATE_WIFI_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_wifi"));
+		UPDATE_WIFI_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_WIFI));
         
-		if( ! wifiManager.isWifiEnabled() ) wifiManager.setWifiEnabled(true);
-		
-		save_wifi_device(wifiManager.getConnectionInfo());
-		
-		DATABASE_TABLES = WiFi_Provider.DATABASE_TABLES;
-		TABLES_FIELDS = WiFi_Provider.TABLES_FIELDS;
-		CONTEXT_URIS = new Uri[] { WiFi_Data.CONTENT_URI, WiFi_Sensor.CONTENT_URI };
-		
-        IntentFilter filter = new IntentFilter();
+		IntentFilter filter = new IntentFilter();
         filter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
         registerReceiver(wifiMonitor, filter);
+		
+        DATABASE_TABLES = WiFi_Provider.DATABASE_TABLES;
+		TABLES_FIELDS = WiFi_Provider.TABLES_FIELDS;
+		CONTEXT_URIS = new Uri[] { WiFi_Data.CONTENT_URI, WiFi_Sensor.CONTENT_URI };
         
-        backgroundService = new Intent(this,BackgroundService.class);
-        backgroundService.setAction(ACTION_AWARE_WIFI_REQUEST_SCAN);
-        
-        wifiScan = PendingIntent.getService(this, 0, backgroundService, 0);
-        
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, UPDATE_WIFI_INTERVAL * 1000, wifiScan);
-        
-        if( Aware.DEBUG ) Log.d(TAG, "WiFi service created!");
+		if( wifiManager.isWifiEnabled() ) {
+			save_wifi_device(wifiManager.getConnectionInfo());
+			backgroundService = new Intent(this,BackgroundService.class);
+	        backgroundService.setAction(ACTION_AWARE_WIFI_REQUEST_SCAN);
+	        wifiScan = PendingIntent.getService(this, 0, backgroundService, 0);
+	        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, UPDATE_WIFI_INTERVAL * 1000, wifiScan);
+	        if( Aware.DEBUG ) Log.d(TAG, "WiFi service created!");
+		} else {
+			stopSelf();
+		}
 	}
 	
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
-        
-        if( Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_wifi")) != UPDATE_WIFI_INTERVAL ) {
-            
-            UPDATE_WIFI_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_wifi"));
-            
-            alarmManager.cancel(wifiScan);
-            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, UPDATE_WIFI_INTERVAL * 1000, wifiScan);
-        }
-        
-        if( Aware.DEBUG ) Log.d(TAG, "WiFi service active...");
+        if( wifiManager.isWifiEnabled() ) {
+    		TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+	        if( Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_WIFI)) != UPDATE_WIFI_INTERVAL ) {
+	            UPDATE_WIFI_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_WIFI));
+	            alarmManager.cancel(wifiScan);
+	            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, UPDATE_WIFI_INTERVAL * 1000, wifiScan);
+	        }
+	        if( Aware.DEBUG ) Log.d(TAG, "WiFi service active...");
+    	}
         
         return START_STICKY;
     }
@@ -143,8 +138,8 @@ public class WiFi extends Aware_Sensor {
 	public void onDestroy() {
 		super.onDestroy();
 		
-		unregisterReceiver(wifiMonitor);
-		alarmManager.cancel(wifiScan);
+		if( wifiMonitor != null ) unregisterReceiver(wifiMonitor);
+		if( wifiScan != null ) alarmManager.cancel(wifiScan);
 		
 		if( Aware.DEBUG ) Log.d(TAG,"WiFi service terminated...");
 	}
@@ -192,7 +187,7 @@ public class WiFi extends Aware_Sensor {
         }else sensorWifi.close();
         
         ContentValues rowData = new ContentValues();
-        rowData.put(WiFi_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(), "device_id"));
+        rowData.put(WiFi_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(WiFi_Sensor.TIMESTAMP, System.currentTimeMillis());
         rowData.put(WiFi_Sensor.MAC_ADDRESS, wifi.getMacAddress());
         rowData.put(WiFi_Sensor.BSSID, ((wifi.getBSSID()!=null)?wifi.getBSSID():""));
@@ -240,7 +235,7 @@ public class WiFi extends Aware_Sensor {
             	if( wifi != null ) {
             		
             		ContentValues rowData = new ContentValues();
-	                rowData.put(WiFi_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(), "device_id"));
+	                rowData.put(WiFi_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
 	                rowData.put(WiFi_Sensor.TIMESTAMP, System.currentTimeMillis());
 	                rowData.put(WiFi_Sensor.MAC_ADDRESS, wifi.getMacAddress());
 	                rowData.put(WiFi_Sensor.BSSID, ((wifi.getBSSID()!=null)?wifi.getBSSID():""));
@@ -268,7 +263,7 @@ public class WiFi extends Aware_Sensor {
                 
                 for(ScanResult ap : aps) {
                     ContentValues rowData = new ContentValues();
-                    rowData.put(WiFi_Data.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+                    rowData.put(WiFi_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
                     rowData.put(WiFi_Data.TIMESTAMP, currentScan);
                     rowData.put(WiFi_Data.BSSID, ap.BSSID);
                     rowData.put(WiFi_Data.SSID, ap.SSID);

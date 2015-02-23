@@ -42,7 +42,7 @@ public class Barometer_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.barometer";
+	public static String AUTHORITY = "com.aware.provider.barometer";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -136,13 +136,25 @@ public class Barometer_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -184,8 +196,10 @@ public class Barometer_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -222,47 +236,43 @@ public class Barometer_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.barometer";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", SENSOR_DEV_ID);
+        sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", SENSOR_DEV_ID);
-		sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Barometer_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", SENSOR_DATA_ID);
+        sensorMap = new HashMap<String, String>();
+        sensorMap.put(Barometer_Sensor._ID, Barometer_Sensor._ID);
+        sensorMap.put(Barometer_Sensor.TIMESTAMP, Barometer_Sensor.TIMESTAMP);
+        sensorMap.put(Barometer_Sensor.DEVICE_ID, Barometer_Sensor.DEVICE_ID);
+        sensorMap.put(Barometer_Sensor.MAXIMUM_RANGE,
+                Barometer_Sensor.MAXIMUM_RANGE);
+        sensorMap.put(Barometer_Sensor.MINIMUM_DELAY,
+                Barometer_Sensor.MINIMUM_DELAY);
+        sensorMap.put(Barometer_Sensor.NAME, Barometer_Sensor.NAME);
+        sensorMap.put(Barometer_Sensor.POWER_MA, Barometer_Sensor.POWER_MA);
+        sensorMap.put(Barometer_Sensor.RESOLUTION, Barometer_Sensor.RESOLUTION);
+        sensorMap.put(Barometer_Sensor.TYPE, Barometer_Sensor.TYPE);
+        sensorMap.put(Barometer_Sensor.VENDOR, Barometer_Sensor.VENDOR);
+        sensorMap.put(Barometer_Sensor.VERSION, Barometer_Sensor.VERSION);
 
-		sensorMap = new HashMap<String, String>();
-		sensorMap.put(Barometer_Sensor._ID, Barometer_Sensor._ID);
-		sensorMap.put(Barometer_Sensor.TIMESTAMP, Barometer_Sensor.TIMESTAMP);
-		sensorMap.put(Barometer_Sensor.DEVICE_ID, Barometer_Sensor.DEVICE_ID);
-		sensorMap.put(Barometer_Sensor.MAXIMUM_RANGE,
-				Barometer_Sensor.MAXIMUM_RANGE);
-		sensorMap.put(Barometer_Sensor.MINIMUM_DELAY,
-				Barometer_Sensor.MINIMUM_DELAY);
-		sensorMap.put(Barometer_Sensor.NAME, Barometer_Sensor.NAME);
-		sensorMap.put(Barometer_Sensor.POWER_MA, Barometer_Sensor.POWER_MA);
-		sensorMap.put(Barometer_Sensor.RESOLUTION, Barometer_Sensor.RESOLUTION);
-		sensorMap.put(Barometer_Sensor.TYPE, Barometer_Sensor.TYPE);
-		sensorMap.put(Barometer_Sensor.VENDOR, Barometer_Sensor.VENDOR);
-		sensorMap.put(Barometer_Sensor.VERSION, Barometer_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Barometer_Data._ID, Barometer_Data._ID);
-		sensorDataMap.put(Barometer_Data.TIMESTAMP, Barometer_Data.TIMESTAMP);
-		sensorDataMap.put(Barometer_Data.DEVICE_ID, Barometer_Data.DEVICE_ID);
-		sensorDataMap.put(Barometer_Data.AMBIENT_PRESSURE,
-				Barometer_Data.AMBIENT_PRESSURE);
-		sensorDataMap.put(Barometer_Data.ACCURACY, Barometer_Data.ACCURACY);
-		sensorDataMap.put(Barometer_Data.LABEL, Barometer_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Barometer_Data._ID, Barometer_Data._ID);
+        sensorDataMap.put(Barometer_Data.TIMESTAMP, Barometer_Data.TIMESTAMP);
+        sensorDataMap.put(Barometer_Data.DEVICE_ID, Barometer_Data.DEVICE_ID);
+        sensorDataMap.put(Barometer_Data.AMBIENT_PRESSURE,
+                Barometer_Data.AMBIENT_PRESSURE);
+        sensorDataMap.put(Barometer_Data.ACCURACY, Barometer_Data.ACCURACY);
+        sensorDataMap.put(Barometer_Data.LABEL, Barometer_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -271,8 +281,11 @@ public class Barometer_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -307,8 +320,12 @@ public class Barometer_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+	    
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

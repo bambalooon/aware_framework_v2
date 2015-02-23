@@ -38,12 +38,12 @@ import com.aware.utils.DatabaseHelper;
  */
 public class Telephony_Provider extends ContentProvider {
 
-	public static final int DATABASE_VERSION = 5;
+	public static final int DATABASE_VERSION = 8;
 
 	/**
 	 * Provider authority: com.aware.TelephonyProvider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.telephony";
+	public static String AUTHORITY = "com.aware.provider.telephony";
 
 	private static final int TELEPHONY = 1;
 	private static final int TELEPHONY_ID = 2;
@@ -194,15 +194,14 @@ public class Telephony_Provider extends ContentProvider {
 					+ " text default ''," + Telephony_Data.SIM_OPERATOR_NAME
 					+ " text default ''," + Telephony_Data.SIM_SERIAL
 					+ " text default ''," + Telephony_Data.SUBSCRIBER_ID
-					+ " text default ''," + "UNIQUE("
-					+ Telephony_Data.TIMESTAMP + "," + Telephony_Data.DEVICE_ID
-					+ ")",
+					+ " text default ''," 
+					+ "UNIQUE(" + Telephony_Data.TIMESTAMP + "," + Telephony_Data.DEVICE_ID + ")",
 			// GSM data
 			GSM_Data._ID + " integer primary key autoincrement,"
 					+ GSM_Data.TIMESTAMP + " real default 0,"
 					+ GSM_Data.DEVICE_ID + " text default ''," + GSM_Data.CID
-					+ " integer default 0," + GSM_Data.LAC
-					+ " integer default 0," + GSM_Data.PSC
+					+ " integer default -1," + GSM_Data.LAC
+					+ " integer default -1," + GSM_Data.PSC
 					+ " integer default 0," + GSM_Data.SIGNAL_STRENGTH
 					+ " integer default -1," + GSM_Data.GSM_BER
 					+ " integer default -1," + "UNIQUE(" + GSM_Data.TIMESTAMP
@@ -211,13 +210,10 @@ public class Telephony_Provider extends ContentProvider {
 			GSM_Neighbors_Data._ID + " integer primary key autoincrement,"
 					+ GSM_Neighbors_Data.TIMESTAMP + " real default 0,"
 					+ GSM_Neighbors_Data.DEVICE_ID + " text default '',"
-					+ GSM_Neighbors_Data.CID + " integer default 0,"
-					+ GSM_Neighbors_Data.LAC + " integer default 0,"
-					+ GSM_Neighbors_Data.PSC + " integer default 0,"
-					+ GSM_Neighbors_Data.SIGNAL_STRENGTH
-					+ " integer default 0," + "UNIQUE("
-					+ GSM_Neighbors_Data.TIMESTAMP + ","
-					+ GSM_Neighbors_Data.DEVICE_ID + ")",
+					+ GSM_Neighbors_Data.CID + " integer default -1,"
+					+ GSM_Neighbors_Data.LAC + " integer default -1,"
+					+ GSM_Neighbors_Data.PSC + " integer default -1,"
+					+ GSM_Neighbors_Data.SIGNAL_STRENGTH + " integer default 0",
 			// CDMA data
 			CDMA_Data._ID + " integer primary key autoincrement,"
 					+ CDMA_Data.TIMESTAMP + " real default 0,"
@@ -242,13 +238,25 @@ public class Telephony_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -306,8 +314,10 @@ public class Telephony_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -366,103 +376,99 @@ public class Telephony_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.telephony";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[0],
+                TELEPHONY);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", TELEPHONY_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[0],
-				TELEPHONY);
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", TELEPHONY_ID);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[1],
+                GSM);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", GSM_ID);
 
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[1],
-				GSM);
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", GSM_ID);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[2],
+                NEIGHBOR);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[2]
+                + "/#", NEIGHBOR_ID);
 
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[2],
-				NEIGHBOR);
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[2]
-				+ "/#", NEIGHBOR_ID);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[3],
+                CDMA);
+        sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[3]
+                + "/#", CDMA_ID);
 
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[3],
-				CDMA);
-		sUriMatcher.addURI(Telephony_Provider.AUTHORITY, DATABASE_TABLES[3]
-				+ "/#", CDMA_ID);
+        telephonyMap = new HashMap<String, String>();
+        telephonyMap.put(Telephony_Data._ID, Telephony_Data._ID);
+        telephonyMap.put(Telephony_Data.TIMESTAMP, Telephony_Data.TIMESTAMP);
+        telephonyMap.put(Telephony_Data.DEVICE_ID, Telephony_Data.DEVICE_ID);
+        telephonyMap.put(Telephony_Data.DATA_ENABLED,
+                Telephony_Data.DATA_ENABLED);
+        telephonyMap.put(Telephony_Data.IMEI_MEID_ESN,
+                Telephony_Data.IMEI_MEID_ESN);
+        telephonyMap.put(Telephony_Data.SOFTWARE_VERSION,
+                Telephony_Data.SOFTWARE_VERSION);
+        telephonyMap
+                .put(Telephony_Data.LINE_NUMBER, Telephony_Data.LINE_NUMBER);
+        telephonyMap.put(Telephony_Data.NETWORK_COUNTRY_ISO_MCC,
+                Telephony_Data.NETWORK_COUNTRY_ISO_MCC);
+        telephonyMap.put(Telephony_Data.NETWORK_OPERATOR_CODE,
+                Telephony_Data.NETWORK_OPERATOR_CODE);
+        telephonyMap.put(Telephony_Data.NETWORK_OPERATOR_NAME,
+                Telephony_Data.NETWORK_OPERATOR_NAME);
+        telephonyMap.put(Telephony_Data.NETWORK_TYPE,
+                Telephony_Data.NETWORK_TYPE);
+        telephonyMap.put(Telephony_Data.PHONE_TYPE, Telephony_Data.PHONE_TYPE);
+        telephonyMap.put(Telephony_Data.SIM_STATE, Telephony_Data.SIM_STATE);
+        telephonyMap.put(Telephony_Data.SIM_OPERATOR_CODE,
+                Telephony_Data.SIM_OPERATOR_CODE);
+        telephonyMap.put(Telephony_Data.SIM_OPERATOR_NAME,
+                Telephony_Data.SIM_OPERATOR_NAME);
+        telephonyMap.put(Telephony_Data.SIM_SERIAL, Telephony_Data.SIM_SERIAL);
+        telephonyMap.put(Telephony_Data.SUBSCRIBER_ID,
+                Telephony_Data.SUBSCRIBER_ID);
 
-		telephonyMap = new HashMap<String, String>();
-		telephonyMap.put(Telephony_Data._ID, Telephony_Data._ID);
-		telephonyMap.put(Telephony_Data.TIMESTAMP, Telephony_Data.TIMESTAMP);
-		telephonyMap.put(Telephony_Data.DEVICE_ID, Telephony_Data.DEVICE_ID);
-		telephonyMap.put(Telephony_Data.DATA_ENABLED,
-				Telephony_Data.DATA_ENABLED);
-		telephonyMap.put(Telephony_Data.IMEI_MEID_ESN,
-				Telephony_Data.IMEI_MEID_ESN);
-		telephonyMap.put(Telephony_Data.SOFTWARE_VERSION,
-				Telephony_Data.SOFTWARE_VERSION);
-		telephonyMap
-				.put(Telephony_Data.LINE_NUMBER, Telephony_Data.LINE_NUMBER);
-		telephonyMap.put(Telephony_Data.NETWORK_COUNTRY_ISO_MCC,
-				Telephony_Data.NETWORK_COUNTRY_ISO_MCC);
-		telephonyMap.put(Telephony_Data.NETWORK_OPERATOR_CODE,
-				Telephony_Data.NETWORK_OPERATOR_CODE);
-		telephonyMap.put(Telephony_Data.NETWORK_OPERATOR_NAME,
-				Telephony_Data.NETWORK_OPERATOR_NAME);
-		telephonyMap.put(Telephony_Data.NETWORK_TYPE,
-				Telephony_Data.NETWORK_TYPE);
-		telephonyMap.put(Telephony_Data.PHONE_TYPE, Telephony_Data.PHONE_TYPE);
-		telephonyMap.put(Telephony_Data.SIM_STATE, Telephony_Data.SIM_STATE);
-		telephonyMap.put(Telephony_Data.SIM_OPERATOR_CODE,
-				Telephony_Data.SIM_OPERATOR_CODE);
-		telephonyMap.put(Telephony_Data.SIM_OPERATOR_NAME,
-				Telephony_Data.SIM_OPERATOR_NAME);
-		telephonyMap.put(Telephony_Data.SIM_SERIAL, Telephony_Data.SIM_SERIAL);
-		telephonyMap.put(Telephony_Data.SUBSCRIBER_ID,
-				Telephony_Data.SUBSCRIBER_ID);
+        gsmMap = new HashMap<String, String>();
+        gsmMap.put(GSM_Data._ID, GSM_Data._ID);
+        gsmMap.put(GSM_Data.TIMESTAMP, GSM_Data.TIMESTAMP);
+        gsmMap.put(GSM_Data.DEVICE_ID, GSM_Data.DEVICE_ID);
+        gsmMap.put(GSM_Data.CID, GSM_Data.CID);
+        gsmMap.put(GSM_Data.LAC, GSM_Data.LAC);
+        gsmMap.put(GSM_Data.PSC, GSM_Data.PSC);
+        gsmMap.put(GSM_Data.SIGNAL_STRENGTH, GSM_Data.SIGNAL_STRENGTH);
+        gsmMap.put(GSM_Data.GSM_BER, GSM_Data.GSM_BER);
 
-		gsmMap = new HashMap<String, String>();
-		gsmMap.put(GSM_Data._ID, GSM_Data._ID);
-		gsmMap.put(GSM_Data.TIMESTAMP, GSM_Data.TIMESTAMP);
-		gsmMap.put(GSM_Data.DEVICE_ID, GSM_Data.DEVICE_ID);
-		gsmMap.put(GSM_Data.CID, GSM_Data.CID);
-		gsmMap.put(GSM_Data.LAC, GSM_Data.LAC);
-		gsmMap.put(GSM_Data.PSC, GSM_Data.PSC);
-		gsmMap.put(GSM_Data.SIGNAL_STRENGTH, GSM_Data.SIGNAL_STRENGTH);
-		gsmMap.put(GSM_Data.GSM_BER, GSM_Data.GSM_BER);
+        gsmNeighborsMap = new HashMap<String, String>();
+        gsmNeighborsMap.put(GSM_Neighbors_Data._ID, GSM_Neighbors_Data._ID);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.TIMESTAMP,
+                GSM_Neighbors_Data.TIMESTAMP);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.DEVICE_ID,
+                GSM_Neighbors_Data.DEVICE_ID);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.CID, GSM_Neighbors_Data.CID);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.LAC, GSM_Neighbors_Data.LAC);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.PSC, GSM_Neighbors_Data.PSC);
+        gsmNeighborsMap.put(GSM_Neighbors_Data.SIGNAL_STRENGTH,
+                GSM_Neighbors_Data.SIGNAL_STRENGTH);
 
-		gsmNeighborsMap = new HashMap<String, String>();
-		gsmNeighborsMap.put(GSM_Neighbors_Data._ID, GSM_Neighbors_Data._ID);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.TIMESTAMP,
-				GSM_Neighbors_Data.TIMESTAMP);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.DEVICE_ID,
-				GSM_Neighbors_Data.DEVICE_ID);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.CID, GSM_Neighbors_Data.CID);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.LAC, GSM_Neighbors_Data.LAC);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.PSC, GSM_Neighbors_Data.PSC);
-		gsmNeighborsMap.put(GSM_Neighbors_Data.SIGNAL_STRENGTH,
-				GSM_Neighbors_Data.SIGNAL_STRENGTH);
-
-		cdmaMap = new HashMap<String, String>();
-		cdmaMap.put(CDMA_Data._ID, CDMA_Data._ID);
-		cdmaMap.put(CDMA_Data.TIMESTAMP, CDMA_Data.TIMESTAMP);
-		cdmaMap.put(CDMA_Data.DEVICE_ID, CDMA_Data.DEVICE_ID);
-		cdmaMap.put(CDMA_Data.BASE_STATION_ID, CDMA_Data.BASE_STATION_ID);
-		cdmaMap.put(CDMA_Data.BASE_STATION_LATITUDE,
-				CDMA_Data.BASE_STATION_LATITUDE);
-		cdmaMap.put(CDMA_Data.BASE_STATION_LONGITUDE,
-				CDMA_Data.BASE_STATION_LONGITUDE);
-		cdmaMap.put(CDMA_Data.NETWORK_ID, CDMA_Data.NETWORK_ID);
-		cdmaMap.put(CDMA_Data.SYSTEM_ID, CDMA_Data.SYSTEM_ID);
-		cdmaMap.put(CDMA_Data.SIGNAL_STRENGTH, CDMA_Data.SIGNAL_STRENGTH);
-		cdmaMap.put(CDMA_Data.CDMA_ECIO, CDMA_Data.CDMA_ECIO);
-		cdmaMap.put(CDMA_Data.EVDO_DBM, CDMA_Data.EVDO_DBM);
-		cdmaMap.put(CDMA_Data.EVDO_ECIO, CDMA_Data.EVDO_ECIO);
-		cdmaMap.put(CDMA_Data.EVDO_SNR, CDMA_Data.EVDO_SNR);
+        cdmaMap = new HashMap<String, String>();
+        cdmaMap.put(CDMA_Data._ID, CDMA_Data._ID);
+        cdmaMap.put(CDMA_Data.TIMESTAMP, CDMA_Data.TIMESTAMP);
+        cdmaMap.put(CDMA_Data.DEVICE_ID, CDMA_Data.DEVICE_ID);
+        cdmaMap.put(CDMA_Data.BASE_STATION_ID, CDMA_Data.BASE_STATION_ID);
+        cdmaMap.put(CDMA_Data.BASE_STATION_LATITUDE,
+                CDMA_Data.BASE_STATION_LATITUDE);
+        cdmaMap.put(CDMA_Data.BASE_STATION_LONGITUDE,
+                CDMA_Data.BASE_STATION_LONGITUDE);
+        cdmaMap.put(CDMA_Data.NETWORK_ID, CDMA_Data.NETWORK_ID);
+        cdmaMap.put(CDMA_Data.SYSTEM_ID, CDMA_Data.SYSTEM_ID);
+        cdmaMap.put(CDMA_Data.SIGNAL_STRENGTH, CDMA_Data.SIGNAL_STRENGTH);
+        cdmaMap.put(CDMA_Data.CDMA_ECIO, CDMA_Data.CDMA_ECIO);
+        cdmaMap.put(CDMA_Data.EVDO_DBM, CDMA_Data.EVDO_DBM);
+        cdmaMap.put(CDMA_Data.EVDO_ECIO, CDMA_Data.EVDO_ECIO);
+        cdmaMap.put(CDMA_Data.EVDO_SNR, CDMA_Data.EVDO_SNR);
+	    
+		return true;
 	}
 
 	/**
@@ -471,8 +477,10 @@ public class Telephony_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -515,8 +523,10 @@ public class Telephony_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case TELEPHONY:

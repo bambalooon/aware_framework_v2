@@ -42,7 +42,7 @@ public class Proximity_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.proximity";
+	public static String AUTHORITY = "com.aware.provider.proximity";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -136,13 +136,25 @@ public class Proximity_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -184,8 +196,10 @@ public class Proximity_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -222,46 +236,42 @@ public class Proximity_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.proximity";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", SENSOR_DEV_ID);
+        sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", SENSOR_DEV_ID);
-		sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Proximity_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", SENSOR_DATA_ID);
+        sensorMap = new HashMap<String, String>();
+        sensorMap.put(Proximity_Sensor._ID, Proximity_Sensor._ID);
+        sensorMap.put(Proximity_Sensor.TIMESTAMP, Proximity_Sensor.TIMESTAMP);
+        sensorMap.put(Proximity_Sensor.DEVICE_ID, Proximity_Sensor.DEVICE_ID);
+        sensorMap.put(Proximity_Sensor.MAXIMUM_RANGE,
+                Proximity_Sensor.MAXIMUM_RANGE);
+        sensorMap.put(Proximity_Sensor.MINIMUM_DELAY,
+                Proximity_Sensor.MINIMUM_DELAY);
+        sensorMap.put(Proximity_Sensor.NAME, Proximity_Sensor.NAME);
+        sensorMap.put(Proximity_Sensor.POWER_MA, Proximity_Sensor.POWER_MA);
+        sensorMap.put(Proximity_Sensor.RESOLUTION, Proximity_Sensor.RESOLUTION);
+        sensorMap.put(Proximity_Sensor.TYPE, Proximity_Sensor.TYPE);
+        sensorMap.put(Proximity_Sensor.VENDOR, Proximity_Sensor.VENDOR);
+        sensorMap.put(Proximity_Sensor.VERSION, Proximity_Sensor.VERSION);
 
-		sensorMap = new HashMap<String, String>();
-		sensorMap.put(Proximity_Sensor._ID, Proximity_Sensor._ID);
-		sensorMap.put(Proximity_Sensor.TIMESTAMP, Proximity_Sensor.TIMESTAMP);
-		sensorMap.put(Proximity_Sensor.DEVICE_ID, Proximity_Sensor.DEVICE_ID);
-		sensorMap.put(Proximity_Sensor.MAXIMUM_RANGE,
-				Proximity_Sensor.MAXIMUM_RANGE);
-		sensorMap.put(Proximity_Sensor.MINIMUM_DELAY,
-				Proximity_Sensor.MINIMUM_DELAY);
-		sensorMap.put(Proximity_Sensor.NAME, Proximity_Sensor.NAME);
-		sensorMap.put(Proximity_Sensor.POWER_MA, Proximity_Sensor.POWER_MA);
-		sensorMap.put(Proximity_Sensor.RESOLUTION, Proximity_Sensor.RESOLUTION);
-		sensorMap.put(Proximity_Sensor.TYPE, Proximity_Sensor.TYPE);
-		sensorMap.put(Proximity_Sensor.VENDOR, Proximity_Sensor.VENDOR);
-		sensorMap.put(Proximity_Sensor.VERSION, Proximity_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Proximity_Data._ID, Proximity_Data._ID);
-		sensorDataMap.put(Proximity_Data.TIMESTAMP, Proximity_Data.TIMESTAMP);
-		sensorDataMap.put(Proximity_Data.DEVICE_ID, Proximity_Data.DEVICE_ID);
-		sensorDataMap.put(Proximity_Data.PROXIMITY, Proximity_Data.PROXIMITY);
-		sensorDataMap.put(Proximity_Data.ACCURACY, Proximity_Data.ACCURACY);
-		sensorDataMap.put(Proximity_Data.LABEL, Proximity_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Proximity_Data._ID, Proximity_Data._ID);
+        sensorDataMap.put(Proximity_Data.TIMESTAMP, Proximity_Data.TIMESTAMP);
+        sensorDataMap.put(Proximity_Data.DEVICE_ID, Proximity_Data.DEVICE_ID);
+        sensorDataMap.put(Proximity_Data.PROXIMITY, Proximity_Data.PROXIMITY);
+        sensorDataMap.put(Proximity_Data.ACCURACY, Proximity_Data.ACCURACY);
+        sensorDataMap.put(Proximity_Data.LABEL, Proximity_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -270,8 +280,10 @@ public class Proximity_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -306,8 +318,10 @@ public class Proximity_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

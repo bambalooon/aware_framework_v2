@@ -12,6 +12,8 @@ package com.aware;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
@@ -29,37 +31,45 @@ import android.app.AlarmManager;
 import android.app.DownloadManager;
 import android.app.DownloadManager.Query;
 import android.app.IntentService;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.BroadcastReceiver;
-import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.database.Cursor;
 import android.database.SQLException;
 import android.database.sqlite.SQLiteException;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+import android.view.View;
+import android.widget.LinearLayout;
+import android.widget.LinearLayout.LayoutParams;
 
 import com.aware.providers.Aware_Provider;
 import com.aware.providers.Aware_Provider.Aware_Device;
 import com.aware.providers.Aware_Provider.Aware_Plugins;
 import com.aware.providers.Aware_Provider.Aware_Settings;
 import com.aware.ui.Plugins_Manager;
+import com.aware.ui.Stream_UI;
 import com.aware.utils.Aware_Plugin;
-import com.aware.utils.Http;
+import com.aware.utils.Https;
 import com.aware.utils.WebserviceHelper;
 
 /**
@@ -88,20 +98,13 @@ public class Aware extends Service {
      * Received broadcast on all modules
      * - Sends the data to the defined webserver
      */
-    public static final String ACTION_AWARE_WEBSERVICE = "ACTION_AWARE_WEBSERVICE";
+    public static final String ACTION_AWARE_SYNC_DATA = "ACTION_AWARE_SYNC_DATA";
     
     /**
      * Received broadcast on all modules<br/>
      * - Cleans the data collected on the device
      */
-    public static final String ACTION_AWARE_CLEAN_DATABASES = "ACTION_AWARE_CLEAN_DATABASES";
-    
-    /**
-     * Received broadcast: change or add a new component configuration.<br/>
-     * Extras:  {@link Aware_Preferences#EXTRA_SET_SETTING}<br/>
-     *          {@link Aware_Preferences#EXTRA_SET_SETTING_VALUE}
-     */
-    public static final String ACTION_AWARE_CONFIGURATION = "ACTION_AWARE_CONFIGURATION";
+    public static final String ACTION_AWARE_CLEAR_DATA = "ACTION_AWARE_CLEAR_DATA";
     
     /**
      * Received broadcast: refresh the framework active sensors.<br/>
@@ -114,14 +117,9 @@ public class Aware extends Service {
     public static final String ACTION_AWARE_CURRENT_CONTEXT = "ACTION_AWARE_CURRENT_CONTEXT";
     
     /**
-     * Used by BackgroundService to start plugins
+     * Used by Aware_Sensor and Aware_Plugin to stop itself
      */
-    private static final String ACTION_AWARE_START_PLUGINS = "ACTION_AWARE_START_PLUGINS";
-    
-    /**
-     * Used by BackgroundService to stop plugins
-     */
-    private static final String ACTION_AWARE_STOP_PLUGINS = "ACTION_AWARE_STOP_PLUGINS";
+    public static final String ACTION_AWARE_STOP_PLUGINS = "ACTION_AWARE_STOP_PLUGINS";
     
     /**
      * Used by plugin to stop all sensors
@@ -129,20 +127,25 @@ public class Aware extends Service {
     public static final String ACTION_AWARE_STOP_SENSORS = "ACTION_AWARE_STOP_SENSORS";
     
     /**
-     * Notification ID that should be used by all core sensors in AWARE
+     * Received broadcast on all modules
+     * - Cleans old data from the content providers
      */
-    public static final int NOTIFY_ID_AWARE = 777;
+    public static final String ACTION_AWARE_SPACE_MAINTENANCE = "ACTION_AWARE_SPACE_MAINTENANCE";
     
     /**
-     * The framework's status check interval.
-     * By default is 5 minutes/300 seconds
+     * Used by Plugin Manager to refresh UI
      */
-    private static final int STATUS_MONITOR_INTERVAL = 300;
+    public static final String ACTION_AWARE_PLUGIN_MANAGER_REFRESH = "ACTION_AWARE_PLUGIN_MANAGER_REFRESH";
     
     /**
      * DownloadManager AWARE update ID, used to prompt user to install the update once finished downloading.
      */
-    public static long AWARE_FRAMEWORK_DOWNLOAD_ID = 0;
+    private static long AWARE_FRAMEWORK_DOWNLOAD_ID = 0;
+    
+    /**
+     * DownloadManager queue for plugins, in case we have multiple dependencies to install.
+     */
+    private static ArrayList<Long> AWARE_PLUGIN_DOWNLOAD_IDS = new ArrayList<Long>();
     
     private static AlarmManager alarmManager = null;
     private static PendingIntent repeatingIntent = null;
@@ -175,6 +178,13 @@ public class Aware extends Service {
     private static Intent temperatureSrv = null;
     private static Intent esmSrv = null;
     private static Intent installationsSrv = null;
+    
+    private final String PREF_FREQUENCY_WATCHDOG = "frequency_watchdog";
+    private final String PREF_LAST_UPDATE = "last_update";
+    private final String PREF_LAST_SYNC = "last_sync";
+    private final int CONST_FREQUENCY_WATCHDOG = 300;
+    
+    private SharedPreferences aware_preferences;
     
     /**
      * Singleton instance of the framework
@@ -210,19 +220,14 @@ public class Aware extends Service {
         super.onCreate();
         
         awareContext = getApplicationContext();
-        alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
-        
-        PreferenceManager.setDefaultValues(this, R.xml.aware_preferences, false);
-        
-        DEBUG = Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_FLAG).equals("true");
-        TAG = Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
-        
-        awareStatusMonitor = new Intent(getApplicationContext(), Aware.class);
-        repeatingIntent = PendingIntent.getService(getApplicationContext(), 0,  awareStatusMonitor, 0);
-        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, STATUS_MONITOR_INTERVAL * 1000, repeatingIntent);
-        
-        Intent synchronise = new Intent(Aware.ACTION_AWARE_WEBSERVICE);
-        webserviceUploadIntent = PendingIntent.getBroadcast(getApplicationContext(), 0, synchronise, 0);
+        aware_preferences = getSharedPreferences("aware_core_prefs", MODE_PRIVATE);
+        if( aware_preferences.getAll().isEmpty() ) {
+        	SharedPreferences.Editor editor = aware_preferences.edit();
+        	editor.putInt(PREF_FREQUENCY_WATCHDOG, CONST_FREQUENCY_WATCHDOG);
+        	editor.putLong(PREF_LAST_SYNC, 0);
+        	editor.putLong(PREF_LAST_UPDATE, 0);
+        	editor.commit();
+        }
         
         IntentFilter filter = new IntentFilter();
         filter.addAction(Intent.ACTION_MEDIA_MOUNTED);
@@ -231,57 +236,74 @@ public class Aware extends Service {
         awareContext.registerReceiver(storage_BR, filter);
         
         filter = new IntentFilter();
-        filter.addAction(Aware.ACTION_AWARE_CLEAN_DATABASES);
-        filter.addAction(Aware.ACTION_AWARE_CONFIGURATION);
+        filter.addAction(Aware.ACTION_AWARE_CLEAR_DATA);
         filter.addAction(Aware.ACTION_AWARE_REFRESH);
-        filter.addAction(Aware.ACTION_AWARE_WEBSERVICE);
+        filter.addAction(Aware.ACTION_AWARE_SYNC_DATA);
         filter.addAction(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
         awareContext.registerReceiver(aware_BR, filter);
         
-        if( Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEVICE_ID).length() == 0 ) {
-            UUID uuid = UUID.randomUUID();
-            Aware.setSetting(awareContext.getContentResolver(),Aware_Preferences.DEVICE_ID, uuid.toString());
-        }
+        alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
         
-        get_device_info();
-        new AsyncPing().execute();
+        awareStatusMonitor = new Intent(getApplicationContext(), Aware.class);
+        repeatingIntent = PendingIntent.getService(getApplicationContext(), 0,  awareStatusMonitor, 0);
+        alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, aware_preferences.getInt(PREF_FREQUENCY_WATCHDOG, 300) * 1000, repeatingIntent);
         
-        if( Aware.DEBUG ) Log.d(TAG,"AWARE framework is created!");
-    }
-    
-    public static void load_preferences( ContentResolver cr, SharedPreferences prefs ) {
-    	Map<String,?> defaults = prefs.getAll();
-        for(Map.Entry<String, ?> entry : defaults.entrySet()) {
-            if( Aware.getSetting(cr, entry.getKey()).length() == 0 ) {
-                Aware.setSetting(cr, entry.getKey(), entry.getValue());
+        Intent synchronise = new Intent(Aware.ACTION_AWARE_SYNC_DATA);
+        webserviceUploadIntent = PendingIntent.getBroadcast(getApplicationContext(), 0, synchronise, 0);
+        
+        if( ! Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED) ) {
+            stopSelf();
+        } else {
+        	SharedPreferences prefs = getSharedPreferences( getPackageName(), Context.MODE_PRIVATE );
+        	if( prefs.getAll().isEmpty() && Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID).length() == 0 ) {
+        		PreferenceManager.setDefaultValues(getApplicationContext(), getPackageName(), Context.MODE_PRIVATE, R.xml.aware_preferences, true);
+        		prefs.edit().commit(); //commit changes
+        	} else {
+        		PreferenceManager.setDefaultValues(getApplicationContext(), getPackageName(), Context.MODE_PRIVATE, R.xml.aware_preferences, false);
+        	}
+        	
+        	Map<String,?> defaults = prefs.getAll();
+            for(Map.Entry<String, ?> entry : defaults.entrySet()) {
+                if( Aware.getSetting(getApplicationContext(), entry.getKey()).length() == 0 ) {
+                    Aware.setSetting(getApplicationContext(), entry.getKey(), entry.getValue());
+                }
+            }
+            
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID).length() == 0 ) {
+	        	UUID uuid = UUID.randomUUID();
+	            Aware.setSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID, uuid.toString());
+        	}
+            
+        	DEBUG = Aware.getSetting(awareContext, Aware_Preferences.DEBUG_FLAG).equals("true");
+            TAG = Aware.getSetting(awareContext, Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(awareContext,Aware_Preferences.DEBUG_TAG):TAG;
+            
+            get_device_info();
+            
+            if( Aware.DEBUG ) Log.d(TAG,"AWARE framework is created!");
+            
+            //Fixed: only the clients do a ping to AWARE's server
+            if( getPackageName().equals("com.aware") ) {
+            	new AsyncPing().execute();
             }
         }
     }
     
-    private class AsyncPing extends AsyncTask<Void, Void, Void> {
-		private String DEVICE_ID = "";
-    	
-    	@Override
-    	protected void onPreExecute() {
-    		super.onPreExecute();
-    		DEVICE_ID = Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.DEVICE_ID);
-    	}
-    	
-    	@Override
-		protected Void doInBackground(Void... params) {
+    private class AsyncPing extends AsyncTask<Void, Void, Boolean> {
+		@Override
+		protected Boolean doInBackground(Void... params) {
 			//Ping AWARE's server with awareContext device's information for framework's statistics log
 	        ArrayList<NameValuePair> device_ping = new ArrayList<NameValuePair>();
-	        device_ping.add(new BasicNameValuePair("device_id", DEVICE_ID));
-	        device_ping.add(new BasicNameValuePair("ping", ""+System.currentTimeMillis()));
-	        new Http().dataPOST("http://www.awareframework.com/index.php/awaredev/alive", device_ping);
-	        return null;
+	        device_ping.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, Aware.getSetting(awareContext, Aware_Preferences.DEVICE_ID)));
+	        device_ping.add(new BasicNameValuePair("ping", String.valueOf(System.currentTimeMillis())));
+	        new Https(awareContext).dataPOST("https://api.awareframework.com/index.php/awaredev/alive", device_ping);
+	        return true;
 		}
     	
     	@Override
-    	protected void onPostExecute(Void result) {
+    	protected void onPostExecute(Boolean result) {
     		super.onPostExecute(result);
-    		if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
-    			sendBroadcast(new Intent(Aware.ACTION_AWARE_WEBSERVICE));
+    		if( result && Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_WEBSERVICE).equals("true")) {
+    			sendBroadcast(new Intent(Aware.ACTION_AWARE_SYNC_DATA));
     		}
     	}
     }
@@ -291,7 +313,7 @@ public class Aware extends Service {
         if( awareContextDevice == null || ! awareContextDevice.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
             rowData.put("timestamp", System.currentTimeMillis());
-            rowData.put("device_id", Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.DEVICE_ID));
+            rowData.put("device_id", Aware.getSetting(awareContext, Aware_Preferences.DEVICE_ID));
             rowData.put("board", Build.BOARD);
             rowData.put("brand", Build.BRAND);
             rowData.put("device",Build.DEVICE);
@@ -324,84 +346,385 @@ public class Aware extends Service {
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        
-        DEBUG = Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_FLAG).equals("true");
-        TAG = Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(awareContext.getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
-        
         if( Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED) ) {
+            DEBUG = Aware.getSetting(awareContext,Aware_Preferences.DEBUG_FLAG).equals("true");
+            TAG = Aware.getSetting(awareContext,Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(awareContext,Aware_Preferences.DEBUG_TAG):TAG;
+            
             if( Aware.DEBUG ) Log.d(TAG,"AWARE framework is active...");
             startAllServices();
             
-            Intent startFramework = new Intent(this, BackgroundService.class);
-            startFramework.setAction(ACTION_AWARE_START_PLUGINS);
-            awareContext.startService(startFramework);
-            
-            if( Aware.getSetting(getContentResolver(), Aware_Preferences.AWARE_AUTO_UPDATE).equals("true") ) {
-            	new Update_Check().execute();
+            //Only the client keeps the plugins running and checks for updates
+            if( getPackageName().equals("com.aware") ) {
+	            //Keep activated plugins running
+            	Cursor enabled_plugins = getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_STATUS + "=" + Aware_Plugin.STATUS_PLUGIN_ON, null, null);
+            	if( enabled_plugins != null && enabled_plugins.moveToFirst() ) {
+            		do {
+            			startPlugin(getApplicationContext(), enabled_plugins.getString(enabled_plugins.getColumnIndex(Aware_Plugins.PLUGIN_PACKAGE_NAME)));
+            		}while(enabled_plugins.moveToNext());
+            	}
+            	if( enabled_plugins != null && ! enabled_plugins.isClosed() ) enabled_plugins.close();
+	            
+	            if( Aware.getSetting(getApplicationContext(), Aware_Preferences.AWARE_AUTO_UPDATE).equals("true") ) {
+	            	if( aware_preferences.getLong(PREF_LAST_UPDATE, 0) == 0 || (aware_preferences.getLong(PREF_LAST_UPDATE, 0) > 0 && System.currentTimeMillis()-aware_preferences.getLong(PREF_LAST_UPDATE, 0) > 6*60*60*1000) ) { //check every 6h
+	            		new Update_Check().execute();
+	            		SharedPreferences.Editor editor = aware_preferences.edit();
+	            		editor.putLong(PREF_LAST_UPDATE, System.currentTimeMillis());
+	            		editor.commit();
+	            	}
+	            }
             }
             
-            int frequency_webservice = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_WEBSERVICE));
-            if( frequency_webservice == 0 ) {
-                if(DEBUG) {
-                    Log.d(TAG,"Data sync is disabled.");
-                }
-                alarmManager.cancel(webserviceUploadIntent);
+            if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {    
+                int frequency_webservice = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_WEBSERVICE));
+                if( frequency_webservice == 0 ) {
+                    if(DEBUG) {
+                        Log.d(TAG,"Data sync is disabled.");
+                    }
+                    alarmManager.cancel(webserviceUploadIntent);
+                } else if( frequency_webservice > 0 ) {
+                    //Fixed: set alarm only once if not set yet.
+                    if( aware_preferences.getLong(PREF_LAST_SYNC, 0) == 0 || (aware_preferences.getLong(PREF_LAST_SYNC, 0) > 0 && System.currentTimeMillis() - aware_preferences.getLong(PREF_LAST_SYNC, 0) > frequency_webservice * 60 * 1000 ) ) {
+                    	if( DEBUG ) {
+                            Log.d(TAG,"Data sync every " + frequency_webservice + " minute(s)");
+                        }
+                    	SharedPreferences.Editor editor = aware_preferences.edit();
+                    	editor.putLong(PREF_LAST_SYNC, System.currentTimeMillis());
+                    	editor.commit();
+                    	alarmManager.setInexactRepeating(AlarmManager.RTC, aware_preferences.getLong(PREF_LAST_SYNC, 0), frequency_webservice * 60 * 1000, webserviceUploadIntent);
+                    }
+                }               
             }
-            if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") && frequency_webservice > 0 ) {
-                if( DEBUG ) {
-                    Log.d(TAG,"Data sync every " + frequency_webservice + " minute(s)");
-                }
-                alarmManager.setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + 1000, frequency_webservice * 60 * 1000, webserviceUploadIntent);
-            }
-        } else {
-            Intent startFramework = new Intent(this, BackgroundService.class);
-            startFramework.setAction(ACTION_AWARE_STOP_PLUGINS);
-            startService(startFramework);
-            stopAllServices();
             
-            if( Aware.DEBUG ) Log.w(TAG,"AWARE framework is on hold...");
+            if( ! Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA).equals("0") ) {
+                Intent dataCleaning = new Intent(ACTION_AWARE_SPACE_MAINTENANCE);
+                awareContext.sendBroadcast(dataCleaning);
+            }
+        } else { //Turn off all enabled plugins
+        	Cursor enabled_plugins = getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_STATUS + "=" + Aware_Plugin.STATUS_PLUGIN_ON, null, null);
+        	if( enabled_plugins != null && enabled_plugins.moveToFirst() ) {
+        		do {
+        			stopPlugin(getApplicationContext(), enabled_plugins.getString(enabled_plugins.getColumnIndex(Aware_Plugins.PLUGIN_PACKAGE_NAME)));
+        		}while(enabled_plugins.moveToNext());
+        		enabled_plugins.close();
+        	}
+        	if( enabled_plugins != null && ! enabled_plugins.isClosed()) enabled_plugins.close();
+        	if( Aware.DEBUG ) Log.w(TAG,"AWARE plugins disabled...");
         }
-        
         return START_STICKY;
+    }
+    
+    /**
+     * Stops a plugin. Expects the package name of the plugin.
+     * @param context
+     * @param package_name
+     */
+    public static void stopPlugin(Context context, String package_name ) {
+    	Cursor is_installed = context.getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + package_name + "'", null, null);
+    	if( is_installed != null && is_installed.moveToFirst() ) {
+    		//it's installed, stop it!
+    		Intent plugin = new Intent();
+    		plugin.setClassName(package_name, package_name + ".Plugin");
+    		context.stopService(plugin);
+    		if( Aware.DEBUG ) Log.d(TAG, package_name + " stopped...");
+    		
+    		ContentValues rowData = new ContentValues();
+            rowData.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugin.STATUS_PLUGIN_OFF);
+            context.getContentResolver().update(Aware_Plugins.CONTENT_URI, rowData, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + package_name + "'", null);            
+    	}
+    	if( is_installed != null && ! is_installed.isClosed() ) is_installed.close();
+    }
+    
+    /**
+     * Starts a plugin. Expects the package name of the plugin.<br/>
+     * It checks if the plugin does exist on the phone. If it doesn't, it will request the user to install it automatically.
+     * @param context
+     * @param package_name
+     */
+    public static void startPlugin(Context context, String package_name ) {
+    	//Check if plugin is installed. If not, ask user to download it.
+    	Cursor is_installed = context.getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + package_name + "'", null, null);
+    	if( is_installed != null && is_installed.moveToFirst() ) {
+    		//We might just have it cached, but not installed
+    		if( isClassAvailable(context, package_name, "Plugin") ) {
+    			//it's installed, start it!
+        		Intent plugin = new Intent();
+        		plugin.setClassName(package_name, package_name + ".Plugin");
+        		context.startService(plugin);
+        		if( Aware.DEBUG ) Log.d(TAG, package_name + " started...");
+        		
+        		ContentValues rowData = new ContentValues();
+                rowData.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugin.STATUS_PLUGIN_ON);
+                context.getContentResolver().update(Aware_Plugins.CONTENT_URI, rowData, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + package_name + "'", null);
+                is_installed.close();
+                return;
+    		}
+            is_installed.close();
+    	}
+    		
+		HttpResponse response = new Https(awareContext).dataGET("https://api.awareframework.com/index.php/plugins/get_plugin/" + package_name);
+		if( response != null && response.getStatusLine().getStatusCode() == 200 ) {
+			try {
+				String data = EntityUtils.toString(response.getEntity());
+				if( data.equals("[]") ) return;
+				
+				JSONObject json_package = new JSONObject(data);
+    			
+    			NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(context);
+    			mBuilder.setSmallIcon(R.drawable.ic_stat_aware_plugin_dependency);
+    			mBuilder.setContentTitle("AWARE Plugin dependency");
+    			mBuilder.setContentText("Missing: " + json_package.getString("title")+". Tap to install.");
+    			mBuilder.setAutoCancel(true);
+    			
+    			Intent pluginIntent = new Intent(context, DownloadPluginService.class);
+    			pluginIntent.putExtra("package_name", package_name);
+    			pluginIntent.putExtra("is_update", false);
+    			
+    			PendingIntent clickIntent = PendingIntent.getService(context, 0, pluginIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+    			mBuilder.setContentIntent(clickIntent);
+    			NotificationManager notManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+    			notManager.notify( json_package.getInt("id"), mBuilder.build());
+    			
+    		} catch (ParseException e) {
+				e.printStackTrace();
+			} catch (JSONException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+    }
+    
+    /**
+     * Requests the download of a plugin given the package name from AWARE webservices.
+     * @param context
+     * @param package_name
+     * @param is_update
+     */
+    public static void downloadPlugin( Context context, String package_name, boolean is_update ) {
+    	Intent pluginIntent = new Intent(context, DownloadPluginService.class);
+    	pluginIntent.putExtra("package_name", package_name);
+    	pluginIntent.putExtra("is_update", is_update);
+		context.startService(pluginIntent);
+    }
+    
+    /**
+     * Given a plugin's package name, fetch the context card for reuse.
+     * @param context: application context
+     * @param package_name: plugin's package name
+     * @return View for reuse (instance of LinearLayout)
+     */
+    public static View getContextCard( final Context context, final String package_name ) {
+    	
+    	if( ! isClassAvailable(context, package_name, "ContextCard") ) {
+    		return null;
+    	}
+    	
+    	String ui_class = package_name + ".ContextCard";
+    	LinearLayout card = new LinearLayout(context);
+    	LayoutParams params = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+    	card.setLayoutParams(params);
+    	card.setOrientation(LinearLayout.VERTICAL);
+    	
+    	try {
+			Context packageContext = context.createPackageContext(package_name, Context.CONTEXT_INCLUDE_CODE | Context.CONTEXT_IGNORE_SECURITY);
+			
+			Class<?> fragment_loader = packageContext.getClassLoader().loadClass(ui_class);
+			Method m = fragment_loader.getDeclaredMethod("getContextCard", Context.class);
+			
+			View ui = (View) m.invoke(null, new Object[]{packageContext});
+			if( ui != null ) {
+				//Check if plugin has settings. If it does, tapping the card shows the settings
+				if( isClassAvailable(context, package_name, "Settings") ) {
+					ui.setOnClickListener(new View.OnClickListener() {
+						@Override
+						public void onClick(View v) {
+							Intent open_settings = new Intent();
+							open_settings.setClassName(package_name, package_name + ".Settings");
+							open_settings.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+							context.startActivity(open_settings);
+						}
+					});
+				}
+				
+				//Set card look-n-feel
+				ui.setBackgroundColor(Color.WHITE);
+				ui.setPadding(20, 20, 20, 20);
+				card.addView(ui);
+				
+				LinearLayout shadow = new LinearLayout(context);
+				LayoutParams params_shadow = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+				params_shadow.setMargins(0, 0, 0, 10);
+				shadow.setBackgroundColor(context.getResources().getColor(R.color.card_shadow));
+				shadow.setMinimumHeight(5);
+				shadow.setLayoutParams(params_shadow);
+				card.addView(shadow);
+				
+				return card;
+			} else {
+				return null;
+			}
+		} catch (NameNotFoundException e) {
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (NoSuchMethodException e) {
+			e.printStackTrace();
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+		} catch (InvocationTargetException e) {
+			e.printStackTrace();
+		} catch (NullPointerException e) {
+			e.printStackTrace();
+		}
+    	return null;
+    }
+    
+    /**
+	 * Given a package and class name, check if the class exists or not.
+	 * @param String package_name
+	 * @param String class_name
+	 * @return true if exists, false otherwise
+	 */
+	private static boolean isClassAvailable( Context context, String package_name, String class_name ) {
+		try{
+			Context package_context = context.createPackageContext(package_name, Context.CONTEXT_IGNORE_SECURITY | Context.CONTEXT_INCLUDE_CODE); 
+			package_context.getClassLoader().loadClass(package_name+"."+class_name);			
+		} catch ( ClassNotFoundException e ) {
+			return false;
+		} catch ( NameNotFoundException e ) {
+			return false;
+		}
+		return true;
+	}
+    
+    /**
+     * Retrieve setting value given key.
+     * @param String key
+     * @return String value
+     */
+    public static String getSetting( Context context, String key ) {
+        
+    	boolean is_restricted_package = true;
+    	
+    	ArrayList<String> global_settings = new ArrayList<String>();
+    	global_settings.add("debug_flag");
+    	global_settings.add("debug_tag");
+    	global_settings.add("device_id");
+    	global_settings.add("study_id");
+    	global_settings.add("study_start");
+    	
+    	if( global_settings.contains(key) ) {
+    		is_restricted_package = false;
+    	}
+    	
+    	String value = "";
+        Cursor qry = context.getContentResolver().query(Aware_Settings.CONTENT_URI, null, Aware_Settings.SETTING_KEY + " LIKE '" + key + "'" + ( is_restricted_package ? " AND " + Aware_Settings.SETTING_PACKAGE_NAME + " LIKE '" + context.getPackageName() + "'" : ""), null, null);
+        if( qry != null && qry.moveToFirst() ) {
+            value = qry.getString(qry.getColumnIndex(Aware_Settings.SETTING_VALUE));
+        }
+        if( qry != null && ! qry.isClosed() ) qry.close();
+        return value;
+    }
+    
+    /**
+     * Insert / Update settings of the framework
+     * @param String key
+     * @param String value
+     */
+    public static void setSetting( Context context, String key, Object value ) {
+        
+    	boolean is_restricted_package = true;
+    	
+    	ArrayList<String> global_settings = new ArrayList<String>();
+    	global_settings.add("debug_flag");
+    	global_settings.add("debug_tag");
+    	global_settings.add("study_id");
+    	global_settings.add("study_start");
+    	
+    	if( global_settings.contains(key) ) {
+    		is_restricted_package = false;
+    	}
+    	
+    	//Only AWARE client can change the device ID if needed
+    	if( key.equals("device_id") && ! context.getPackageName().equals("com.aware") ) {
+    		return;
+    	}
+    	
+    	ContentValues setting = new ContentValues();
+        setting.put(Aware_Settings.SETTING_KEY, key);
+        setting.put(Aware_Settings.SETTING_VALUE, value.toString());
+        setting.put(Aware_Settings.SETTING_PACKAGE_NAME, context.getPackageName());
+        
+        Cursor qry = context.getContentResolver().query(Aware_Settings.CONTENT_URI, null, Aware_Settings.SETTING_KEY + " LIKE '" + key + "'" + (is_restricted_package ? " AND " + Aware_Settings.SETTING_PACKAGE_NAME + " LIKE '" + context.getPackageName() + "'" : ""), null, null);
+        //update
+        if( qry != null && qry.moveToFirst() ) {
+            try {
+                if( ! qry.getString(qry.getColumnIndex(Aware_Settings.SETTING_VALUE)).equals(value.toString()) ) {
+                    context.getContentResolver().update(Aware_Settings.CONTENT_URI, setting, Aware_Settings.SETTING_ID + "=" + qry.getInt(qry.getColumnIndex(Aware_Settings.SETTING_ID)), null);
+                    if( Aware.DEBUG) Log.d(Aware.TAG,"Updated: "+key+"="+value);
+                }
+            }catch( SQLiteException e ) {
+                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
+            }catch( SQLException e ) {
+                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
+            }
+        //insert
+        } else {
+            try {
+                context.getContentResolver().insert(Aware_Settings.CONTENT_URI, setting);
+                if( Aware.DEBUG) Log.d(Aware.TAG,"Added: " + key + "=" + value);
+            }catch( SQLiteException e ) {
+                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
+            }catch( SQLException e ) {
+                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
+            }
+        }
+        if( qry != null && ! qry.isClosed() ) qry.close();
     }
     
     @Override
     public void onDestroy() {
         super.onDestroy();
         
-        alarmManager.cancel(repeatingIntent);
-        alarmManager.cancel(webserviceUploadIntent);
+        if( repeatingIntent != null ) alarmManager.cancel(repeatingIntent);
+        if( webserviceUploadIntent != null) alarmManager.cancel(webserviceUploadIntent);
         
-        awareContext.unregisterReceiver(aware_BR);
-        awareContext.unregisterReceiver(storage_BR);
+        if( aware_BR != null ) awareContext.unregisterReceiver(aware_BR);
+        if( storage_BR != null ) awareContext.unregisterReceiver(storage_BR);
     }
     
-    private class Update_Check extends AsyncTask<Void, Void, Void> {
+    private class Update_Check extends AsyncTask<Void, Void, Boolean> {
+    	String filename = "", whats_new = "";
+    	int version = 0;
+    	PackageInfo awarePkg = null;
+    	
     	@Override
-    	protected Void doInBackground(Void... params) {
-    		PackageInfo awarePkg = null;
-			try {
+    	protected Boolean doInBackground(Void... params) {
+    		try {
 				awarePkg = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_META_DATA);
 			} catch (NameNotFoundException e1) {
 				e1.printStackTrace();
-				return null;
+				return false;
 			}
 			
-    		HttpResponse response = new Http().dataGET("http://www.awareframework.com/index.php/awaredev/framework_latest");
+    		HttpResponse response = new Https(getApplicationContext()).dataGET("https://api.awareframework.com/index.php/awaredev/framework_latest");
 	        if( response != null && response.getStatusLine().getStatusCode() == 200 ) {
 	        	try {
 					JSONArray data = new JSONArray(EntityUtils.toString(response.getEntity()));
 					JSONObject latest_framework = data.getJSONObject(0);
 					
-					if( Aware.DEBUG ) Log.d(Aware.TAG, "Latest:" + latest_framework.toString());
+					if( Aware.DEBUG ) Log.d(Aware.TAG, "Latest: " + latest_framework.toString());
 					
-					String filename = latest_framework.getString("filename");
-					int version = latest_framework.getInt("version");
-					String whats_new = latest_framework.getString("whats_new");
+					filename = latest_framework.getString("filename");
+					version = latest_framework.getInt("version");
+					whats_new = latest_framework.getString("whats_new");
 					
 					if( version > awarePkg.versionCode ) {
-						update_framework( filename, whats_new );
+						return true;
 					}
+					return false;
 				} catch (ParseException e) {
 					e.printStackTrace();
 				} catch (IOException e) {
@@ -412,33 +735,293 @@ public class Aware extends Service {
 	        } else {
 	        	if( Aware.DEBUG ) Log.d(Aware.TAG, "Unable to fetch latest framework from AWARE repository...");
 	        }
-    		
-    		return null;
+    		return false;
     	}
     	
-    	private void update_framework( String filename, String whats_new ) {
-    		//Make sure we have the releases folder
-    		File releases = new File(Environment.getExternalStorageDirectory()+"/AWARE/releases/");
-    		releases.mkdirs();
-    		
-    		String url = "http://www.awareframework.com/releases/" + filename;
-    		
-    		DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-    		request.setDescription(whats_new);
-    		request.setTitle("AWARE");
-    		request.setDestinationInExternalPublicDir("/", "AWARE/releases/"+filename);
-    		DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-    		Aware.AWARE_FRAMEWORK_DOWNLOAD_ID = manager.enqueue(request);
+    	@Override
+    	protected void onPostExecute(Boolean result) {
+    		super.onPostExecute(result);
+    		if( result ) {
+    			NotificationCompat.Builder mBuilder = new NotificationCompat.Builder(getApplicationContext());
+    			mBuilder.setSmallIcon(R.drawable.ic_stat_aware_update);
+    			mBuilder.setContentTitle("AWARE update");
+    			mBuilder.setContentText("New: " + whats_new + "\nVersion: " + version + "\nTap to install...");
+    			mBuilder.setAutoCancel(true);
+    			
+    			Intent updateIntent = new Intent(getApplicationContext(), UpdateFrameworkService.class);
+    			updateIntent.putExtra("filename", filename);
+    			
+    			PendingIntent clickIntent = PendingIntent.getService(getApplicationContext(), 0, updateIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+    			mBuilder.setContentIntent(clickIntent);
+    			NotificationManager notManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+    			notManager.notify(version, mBuilder.build());
+    		}
     	}
     }
     
     /**
+     * AWARE's plugin monitor
+     * - Installs a plugin that was just downloaded
+     * - Checks if a package is a plugin or not
+     * @author denzilferreira
+     *
+     */
+    public static class PluginMonitor extends BroadcastReceiver {
+    	private static PackageManager mPkgManager;
+    	
+    	@Override
+    	public void onReceive(Context context, Intent intent) {
+    		mPkgManager = context.getPackageManager();
+    		
+        	Bundle extras = intent.getExtras();
+            Uri packageUri = intent.getData();
+            if( packageUri == null ) return;
+            String packageName = packageUri.getSchemeSpecificPart();
+            if( packageName == null ) return;
+            
+            if( ! packageName.matches("com.aware.plugin.*") ) return;
+        	
+            if( intent.getAction().equals(Intent.ACTION_PACKAGE_ADDED) ) {
+                //Updating for new package
+                if( extras.getBoolean(Intent.EXTRA_REPLACING) ) {
+                    if(Aware.DEBUG) Log.d(TAG, packageName + " is updating!");
+                    
+                    ContentValues rowData = new ContentValues();
+                    rowData.put(Aware_Plugins.PLUGIN_VERSION, getVersion(packageName));
+                    
+                    Cursor current_status = context.getContentResolver().query(Aware_Plugins.CONTENT_URI, new String[]{Aware_Plugins.PLUGIN_STATUS}, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + packageName + "'", null, null);
+                    if( current_status != null && current_status.moveToFirst() ) {
+                        if( current_status.getInt(current_status.getColumnIndex(Aware_Plugins.PLUGIN_STATUS)) == Aware_Plugin.STATUS_PLUGIN_ON ) {
+                            Intent aware = new Intent(Aware.ACTION_AWARE_REFRESH);
+                            context.sendBroadcast(aware);
+                        } 
+                        if( current_status.getInt(current_status.getColumnIndex(Aware_Plugins.PLUGIN_STATUS)) == Plugins_Manager.PLUGIN_NOT_INSTALLED || current_status.getInt(current_status.getColumnIndex(Aware_Plugins.PLUGIN_STATUS)) == Plugins_Manager.PLUGIN_UPDATED ) {
+                        	rowData.put(Aware_Plugins.PLUGIN_STATUS, Plugins_Manager.PLUGIN_ACTIVE);
+                        }
+                    }
+                    if( current_status != null && ! current_status.isClosed() ) current_status.close();
+                    
+                    context.getContentResolver().update(Aware_Plugins.CONTENT_URI, rowData, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + packageName + "'", null);
+                    
+                    //Refresh plugin manager UI if visible
+                    context.sendBroadcast(new Intent(ACTION_AWARE_PLUGIN_MANAGER_REFRESH));
+                    
+                    //Refresh stream UI if visible
+                    context.sendBroadcast(new Intent(Stream_UI.ACTION_AWARE_UPDATE_STREAM));
+                    
+                    //all done
+                    return;
+                }
+                
+                //Installing new
+                try {
+                    ApplicationInfo appInfo = mPkgManager.getApplicationInfo( packageName, PackageManager.GET_ACTIVITIES );
+                    //Check if this is a package for which we have more info from the server
+                    new Plugin_Info_Async().execute(appInfo);
+                } catch( final NameNotFoundException e ) {
+                	e.printStackTrace();
+                }
+            }
+            
+            if( intent.getAction().equals(Intent.ACTION_PACKAGE_REMOVED) ) {
+                //Updating
+                if( extras.getBoolean(Intent.EXTRA_REPLACING) ) {
+                    //this is an update, bail out.
+                    return;
+                }
+                //Deleting
+                context.getContentResolver().delete(Aware_Plugins.CONTENT_URI, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + packageName + "'", null);
+                if( Aware.DEBUG ) Log.d(TAG,"AWARE plugin removed:" + packageName);
+                
+                //Refresh stream UI if visible
+                context.sendBroadcast(new Intent(Stream_UI.ACTION_AWARE_UPDATE_STREAM));
+                
+                //Refresh Plugin manager UI if visible
+                context.sendBroadcast(new Intent(ACTION_AWARE_PLUGIN_MANAGER_REFRESH));
+            }
+    	}
+    	
+    	private int getVersion( String package_name ) {
+        	try {
+    			PackageInfo pkgInfo = mPkgManager.getPackageInfo(package_name, PackageManager.GET_META_DATA);
+    			return pkgInfo.versionCode;
+    		} catch (NameNotFoundException e) {
+    			if( Aware.DEBUG ) Log.d( Aware.TAG, e.getMessage());
+    		}
+        	return 0;
+        }
+    }
+    
+    /**
+     * Fetches info from webservices on the installed plugins.
+     * @author denzilferreira
+     *
+     */
+    private static class Plugin_Info_Async extends AsyncTask<ApplicationInfo, Void, JSONObject> {
+		private ApplicationInfo app;
+    	
+    	@Override
+		protected JSONObject doInBackground(ApplicationInfo... params) {
+			
+    		app = params[0];
+    		
+    		JSONObject json_package = null;
+            HttpResponse http_request = new Https(awareContext).dataGET("https://api.awareframework.com/index.php/plugins/get_plugin/" + app.packageName);
+            if( http_request != null && http_request.getStatusLine().getStatusCode() == 200 ) {
+            	try {
+            		String json_string = EntityUtils.toString(http_request.getEntity());
+            		if( ! json_string.equals("[]") ) { //we found the information of the plugin online!
+            			json_package = new JSONObject(json_string);
+            		}
+				} catch (ParseException e) {
+					e.printStackTrace();
+				} catch (JSONException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+            }
+            return json_package;
+		}
+    	
+		@Override
+		protected void onPostExecute(JSONObject json_package) {
+			super.onPostExecute(json_package);
+			
+			//If we already have cached information for this package, just update it
+			boolean is_cached = false;
+			Cursor plugin_cached = awareContext.getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + app.packageName + "'", null, null);
+			if( plugin_cached != null && plugin_cached.moveToFirst() ) {
+				is_cached = true;
+			}
+			if( plugin_cached != null && ! plugin_cached.isClosed()) plugin_cached.close();
+			
+			ContentValues rowData = new ContentValues();
+            rowData.put(Aware_Plugins.PLUGIN_PACKAGE_NAME, app.packageName);
+            rowData.put(Aware_Plugins.PLUGIN_NAME, app.loadLabel(awareContext.getPackageManager()).toString());
+            rowData.put(Aware_Plugins.PLUGIN_VERSION, getVersion(app.packageName));
+            rowData.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugin.STATUS_PLUGIN_ON);
+            if( json_package != null ) {
+            	try {
+            		//NOTE: We are only saving the author and description. The icon is part of the application package that was just installed.
+					rowData.put(Aware_Plugins.PLUGIN_AUTHOR, json_package.getString("first_name") + " " + json_package.getString("last_name") + " - " + json_package.getString("email"));
+					rowData.put(Aware_Plugins.PLUGIN_DESCRIPTION, json_package.getString("desc"));
+				} catch (JSONException e) {
+					e.printStackTrace();
+				}
+            }
+            
+            if( ! is_cached ) {
+            	awareContext.getContentResolver().insert(Aware_Plugins.CONTENT_URI, rowData);
+            } else {
+            	awareContext.getContentResolver().update(Aware_Plugins.CONTENT_URI, rowData, Aware_Plugins.PLUGIN_PACKAGE_NAME + " LIKE '" + app.packageName + "'", null);
+            }
+            
+            if( Aware.DEBUG ) Log.d(TAG,"AWARE plugin added and activated:" + app.packageName);
+            
+            //Refresh stream UI if visible
+            awareContext.sendBroadcast(new Intent(Stream_UI.ACTION_AWARE_UPDATE_STREAM));
+            
+            //Refresh Plugin Manager UI if visible
+            awareContext.sendBroadcast(new Intent(ACTION_AWARE_PLUGIN_MANAGER_REFRESH));
+            
+            Intent aware = new Intent(Aware.ACTION_AWARE_REFRESH);
+            awareContext.sendBroadcast(aware);
+		}
+		
+		private int getVersion( String package_name ) {
+        	try {
+    			PackageInfo pkgInfo = awareContext.getPackageManager().getPackageInfo(package_name, PackageManager.GET_META_DATA);
+    			return pkgInfo.versionCode;
+    		} catch (NameNotFoundException e) {
+    			if( Aware.DEBUG ) Log.d( Aware.TAG, e.getMessage());
+    		}
+        	return 0;
+        }
+    }
+    
+    /**
+     * Background service to download missing plugins
+     * @author denzilferreira
+     *
+     */
+    public static class DownloadPluginService extends IntentService {
+    	public DownloadPluginService() {
+    		super("Download Plugin service");
+    	}
+    	
+    	@Override
+    	protected void onHandleIntent(Intent intent) {
+    		String package_name = intent.getStringExtra("package_name");
+    		boolean is_update = intent.getBooleanExtra("is_update", false);
+    		
+    		HttpResponse response = new Https(awareContext).dataGET("https://api.awareframework.com/index.php/plugins/get_plugin/" + package_name);
+    		if( response != null && response.getStatusLine().getStatusCode() == 200 ) {
+    			try {
+    				JSONObject json_package = new JSONObject(EntityUtils.toString(response.getEntity()));
+    				
+        			//Create the folder where all the databases will be stored on external storage
+    		        File folders = new File(Environment.getExternalStorageDirectory()+"/AWARE/plugins/");
+    		        folders.mkdirs();
+    		        
+    		        String package_url = "http://plugins.awareframework.com/" + json_package.getString("package_path").replace("/uploads/", "") + json_package.getString("package_name");
+    				DownloadManager.Request request = new DownloadManager.Request(Uri.parse(package_url));
+    		    	if( ! is_update ) {
+    		    		request.setDescription("Downloading " + json_package.getString("title") );
+    		    	} else {
+    		    		request.setDescription("Updating " + json_package.getString("title") );
+    		    	}
+    		    	request.setTitle("AWARE");
+    		    	request.setDestinationInExternalPublicDir("/", "AWARE/plugins/" + json_package.getString("package_name"));
+    		    	
+    		    	DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+    		    	AWARE_PLUGIN_DOWNLOAD_IDS.add(manager.enqueue(request));
+        		} catch (ParseException e) {
+    				e.printStackTrace();
+    			} catch (JSONException e) {
+    				e.printStackTrace();
+    			} catch (IOException e) {
+    				e.printStackTrace();
+    			}
+    		}
+    	}
+    }
+    
+    /**
+     * Background service to download latest version of AWARE
+     * @author denzilferreira
+     *
+     */
+    public static class UpdateFrameworkService extends IntentService {
+		public UpdateFrameworkService() {
+			super("Update Framework service");			
+		}
+
+		@Override
+		protected void onHandleIntent(Intent intent) {
+			String filename = intent.getStringExtra("filename");
+			
+			//Make sure we have the releases folder
+			File releases = new File(Environment.getExternalStorageDirectory()+"/AWARE/releases/");
+			releases.mkdirs();
+			
+			String url = "http://www.awareframework.com/" + filename;
+			
+			DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+			request.setDescription("Downloading newest AWARE... please wait...");
+			request.setTitle("AWARE Update");
+			request.setDestinationInExternalPublicDir("/", "AWARE/releases/"+filename);
+			DownloadManager manager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+			AWARE_FRAMEWORK_DOWNLOAD_ID = manager.enqueue(request);
+		}
+    }
+    
+    /**
      * BroadcastReceiver that monitors for AWARE framework actions:
-     * - ACTION_AWARE_WEBSERVICE = upload data to remote webservice server.
-     * - ACTION_AWARE_CLEAN_DATABASES = clears local device's AWARE modules databases.
-     * - ACTION_AWARE_CONFIGURATION = change settings from the framework.
+     * - ACTION_AWARE_SYNC_DATA = upload data to remote webservice server.
+     * - ACTION_AWARE_CLEAR_DATA = clears local device's AWARE modules databases.
      * - ACTION_AWARE_REFRESH - apply changes to the configuration.
-     * - {@link DownloadManager#ACTION_DOWNLOAD_COMPLETE}
+     * - {@link DownloadManager#ACTION_DOWNLOAD_COMPLETE} - when AWARE framework update has been downloaded.
      * @author denzil
      *
      */
@@ -450,30 +1033,24 @@ public class Aware extends Service {
         	String[] TABLES_FIELDS = Aware_Provider.TABLES_FIELDS;
         	Uri[] CONTEXT_URIS = new Uri[]{ Aware_Device.CONTENT_URI };
         	
-        	if( intent.getAction().equals(Aware.ACTION_AWARE_WEBSERVICE) && Aware.getSetting(context.getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
-            	Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_SYNC_TABLE);
-    			webserviceHelper.putExtra(WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[0]);
-        		webserviceHelper.putExtra(WebserviceHelper.EXTRA_FIELDS, TABLES_FIELDS[0]);
-        		webserviceHelper.putExtra(WebserviceHelper.EXTRA_CONTENT_URI, CONTEXT_URIS[0].toString());
+        	if( intent.getAction().equals(Aware.ACTION_AWARE_SYNC_DATA) && Aware.getSetting(context, Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
+            	Intent webserviceHelper = new Intent( WebserviceHelper.ACTION_AWARE_WEBSERVICE_SYNC_TABLE );
+    			webserviceHelper.putExtra( WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[0] );
+        		webserviceHelper.putExtra( WebserviceHelper.EXTRA_FIELDS, TABLES_FIELDS[0] );
+        		webserviceHelper.putExtra( WebserviceHelper.EXTRA_CONTENT_URI, CONTEXT_URIS[0].toString() );
         		context.startService(webserviceHelper);
             }
         	
-            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAN_DATABASES) ) {
+            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAR_DATA) ) {
                 context.getContentResolver().delete(Aware_Provider.Aware_Device.CONTENT_URI, null, null);
                 if( Aware.DEBUG ) Log.d(TAG,"Cleared " + CONTEXT_URIS[0]);
                 
                 //Clear remotely if webservices are active
-                if( Aware.getSetting(context.getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
-	        		Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_CLEAR_TABLE);
-	        		webserviceHelper.putExtra(WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[0]);
+                if( Aware.getSetting(context, Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
+	        		Intent webserviceHelper = new Intent( WebserviceHelper.ACTION_AWARE_WEBSERVICE_CLEAR_TABLE );
+	        		webserviceHelper.putExtra( WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[0] );
 	        		context.startService(webserviceHelper);
                 }
-            }
-            
-            if( intent.getAction().equals(Aware.ACTION_AWARE_CONFIGURATION) ) {
-                setSetting(context.getContentResolver(), intent.getStringExtra(Aware_Settings.SETTING_KEY), intent.getStringExtra(Aware_Settings.SETTING_VALUE));
-                Intent restart = new Intent(context, Aware.class);
-                context.startService(restart);
             }
             
             if( intent.getAction().equals(Aware.ACTION_AWARE_REFRESH)) {
@@ -486,9 +1063,7 @@ public class Aware extends Service {
             	long downloaded_id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, 0);
             	
             	if( downloaded_id == AWARE_FRAMEWORK_DOWNLOAD_ID ) {
-            		
-            		if( Aware.DEBUG ) Log.d(Aware.TAG, "AWARE update received...");
-            		
+            		if( Aware.DEBUG ) Log.d(Aware.TAG, "AWARE framework update received...");
             		Query qry = new Query();
             		qry.setFilterById(AWARE_FRAMEWORK_DOWNLOAD_ID);
             		Cursor data = manager.query(qry);
@@ -503,6 +1078,30 @@ public class Aware extends Service {
             			}
             		}
             		if( data != null && ! data.isClosed() ) data.close();
+            	} 
+            	
+            	if( AWARE_PLUGIN_DOWNLOAD_IDS.size() > 0 ) {
+            		for( int i = 0; i < AWARE_PLUGIN_DOWNLOAD_IDS.size(); i++ ) {
+                	    long queue = AWARE_PLUGIN_DOWNLOAD_IDS.get(i);
+                	    if( downloaded_id == queue ) {
+                	        Cursor cur = manager.query(new Query().setFilterById(queue));
+                            if( cur != null && cur.moveToFirst() ) {
+                                if( cur.getInt(cur.getColumnIndex(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL ) {
+                                    String filePath = cur.getString(cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
+                                    
+                                    if( Aware.DEBUG ) Log.d(Aware.TAG, "Plugin to install: " + filePath);
+                                    
+                                    File mFile = new File( Uri.parse(filePath).getPath() );
+                                    Intent promptInstall = new Intent(Intent.ACTION_VIEW);
+                                    promptInstall.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    promptInstall.setDataAndType(Uri.fromFile(mFile), "application/vnd.android.package-archive");
+                                    context.startActivity(promptInstall);
+                                }
+                            }
+                            if( cur != null && ! cur.isClosed() ) cur.close();
+                	    }
+                	}
+                	AWARE_PLUGIN_DOWNLOAD_IDS.remove(downloaded_id); //dequeue
             	}
             }
         }
@@ -525,152 +1124,109 @@ public class Aware extends Service {
     private static final Storage_Broadcaster storage_BR = new Storage_Broadcaster();
     
     /**
-     * Aware framework background service
-     * - Backup the device information
-     * @author df
-     *
-     */
-    public static class BackgroundService extends IntentService {
-        
-        public BackgroundService() {
-            super(TAG + " background service");
-        }
-        
-        @Override
-        protected void onHandleIntent(Intent intent) {
-            if( intent.getAction().equals(Aware.ACTION_AWARE_START_PLUGINS)) {
-                Cursor plugins = awareContext.getContentResolver().query(Aware_Plugins.CONTENT_URI, null, Aware_Plugins.PLUGIN_STATUS + "=" + Aware_Plugin.STATUS_PLUGIN_ON, null, null);
-                if( plugins != null && plugins.moveToFirst() ) {
-                    do {
-                        String plugin_package = plugins.getString(plugins.getColumnIndex(Aware_Plugins.PLUGIN_PACKAGE_NAME));
-                        Intent start_plugin = new Intent( Plugins_Manager.ACTION_AWARE_ACTIVATE_PLUGIN );
-                        start_plugin.putExtra(Plugins_Manager.EXTRA_PACKAGE_NAME, plugin_package);
-                        sendBroadcast(start_plugin);
-                    }while(plugins.moveToNext());
-                }
-                if( plugins!= null && ! plugins.isClosed() ) plugins.close();
-            }
-            
-            if( intent.getAction().equals(Aware.ACTION_AWARE_STOP_PLUGINS) ) {
-                Cursor plugins = awareContext.getContentResolver().query(Aware_Plugins.CONTENT_URI, null, null, null, null);
-                if( plugins != null && plugins.moveToFirst() ) {
-                    do {
-                    	String plugin_package = plugins.getString(plugins.getColumnIndex(Aware_Plugins.PLUGIN_PACKAGE_NAME));
-                        Intent stop_plugin = new Intent( Plugins_Manager.ACTION_AWARE_DEACTIVATE_PLUGIN );
-                        stop_plugin.putExtra(Plugins_Manager.EXTRA_PACKAGE_NAME, plugin_package);
-                        sendBroadcast(stop_plugin);
-                    }while(plugins.moveToNext());
-                }
-                if( plugins != null && ! plugins.isClosed() ) plugins.close();                
-            }
-        }
-    }
-    
-    /**
      * Start active services
      */
     protected void startAllServices() {
-        
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_APPLICATIONS).equals("true")) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_APPLICATIONS).equals("true")) {
             startApplications();
         }else stopApplications();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_ACCELEROMETER).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_ACCELEROMETER).equals("true") ) {
             startAccelerometer();
         }else stopAccelerometer();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_INSTALLATIONS).equals("true")) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_INSTALLATIONS).equals("true")) {
             startInstallations();
         }else stopInstallations();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LOCATION_GPS).equals("true") 
-         || Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LOCATION_NETWORK).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_LOCATION_GPS).equals("true") 
+         || Aware.getSetting(awareContext, Aware_Preferences.STATUS_LOCATION_NETWORK).equals("true") ) {
             startLocations();
         }else stopLocations();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_BLUETOOTH).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_BLUETOOTH).equals("true") ) {
             startBluetooth();
         }else stopBluetooth();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_SCREEN).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_SCREEN).equals("true") ) {
             startScreen();
         }else stopScreen();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_BATTERY).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_BATTERY).equals("true") ) {
             startBattery();
         }else stopBattery();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_NETWORK).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_NETWORK_EVENTS).equals("true") ) {
             startNetwork();
         }else stopNetwork();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_NETWORK_TRAFFIC).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_NETWORK_TRAFFIC).equals("true") ) {
             startTraffic();
         }else stopTraffic();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_COMMUNICATION).equals("true") 
-    	 || Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_CALLS).equals("true") 
-    	 || Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_MESSAGES).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_COMMUNICATION_EVENTS).equals("true") 
+    	 || Aware.getSetting(awareContext, Aware_Preferences.STATUS_CALLS).equals("true") 
+    	 || Aware.getSetting(awareContext, Aware_Preferences.STATUS_MESSAGES).equals("true") ) {
             startCommunication();
         }else stopCommunication();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_PROCESSOR).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_PROCESSOR).equals("true") ) {
             startProcessor();
         }else stopProcessor();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_TIMEZONE).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_TIMEZONE).equals("true") ) {
             startTimeZone();
         }else stopTimeZone();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_MQTT).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_MQTT).equals("true") ) {
             startMQTT();
         }else stopMQTT();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_GYROSCOPE).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_GYROSCOPE).equals("true") ) {
             startGyroscope();
         }else stopGyroscope();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_WIFI).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_WIFI).equals("true") ) {
             startWiFi();
         }else stopWiFi();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_TELEPHONY).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_TELEPHONY).equals("true") ) {
             startTelephony();
         }else stopTelephony();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_ROTATION).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_ROTATION).equals("true") ) {
             startRotation();
         }else stopRotation();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LIGHT).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_LIGHT).equals("true") ) {
             startLight();
         }else stopLight();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_PROXIMITY).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_PROXIMITY).equals("true") ) {
             startProximity();
         }else stopProximity();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_MAGNETOMETER).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_MAGNETOMETER).equals("true") ) {
             startMagnetometer();
         }else stopMagnetometer();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_BAROMETER).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_BAROMETER).equals("true") ) {
             startBarometer();
         }else stopBarometer();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_GRAVITY).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_GRAVITY).equals("true") ) {
             startGravity();
         }else stopGravity();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LINEAR_ACCELEROMETER).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_LINEAR_ACCELEROMETER).equals("true") ) {
             startLinearAccelerometer();
         }else stopLinearAccelerometer();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_TEMPERATURE).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_TEMPERATURE).equals("true") ) {
             startTemperature();
         }else stopTemperature();
         
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_ESM).equals("true") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_ESM).equals("true") ) {
             startESM();
         }else stopESM();
     }
@@ -955,8 +1511,8 @@ public class Aware extends Service {
      * Stop the locations module
      */
     protected void stopLocations() {
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LOCATION_GPS).equals("false") 
-         && Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_LOCATION_NETWORK).equals("false") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_LOCATION_GPS).equals("false") 
+         && Aware.getSetting(awareContext, Aware_Preferences.STATUS_LOCATION_NETWORK).equals("false") ) {
             if(locationsSrv != null) awareContext.stopService(locationsSrv);
         }
     }
@@ -1033,7 +1589,7 @@ public class Aware extends Service {
      * Stop traffic module
      */
     protected void stopTraffic() {
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_NETWORK_TRAFFIC).equals("false") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_NETWORK_TRAFFIC).equals("false") ) {
             if( trafficSrv != null ) awareContext.stopService(trafficSrv);
         }
     }
@@ -1065,9 +1621,9 @@ public class Aware extends Service {
      * Stop communication module
      */
     protected void stopCommunication() {
-        if( Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_COMMUNICATION).equals("false") 
-         && Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_CALLS).equals("false") 
-         && Aware.getSetting(awareContext.getContentResolver(), Aware_Preferences.STATUS_MESSAGES).equals("false") ) {
+        if( Aware.getSetting(awareContext, Aware_Preferences.STATUS_COMMUNICATION_EVENTS).equals("false") 
+         && Aware.getSetting(awareContext, Aware_Preferences.STATUS_CALLS).equals("false") 
+         && Aware.getSetting(awareContext, Aware_Preferences.STATUS_MESSAGES).equals("false") ) {
             if(communicationSrv != null) awareContext.stopService(communicationSrv);
         }
     }
@@ -1085,60 +1641,5 @@ public class Aware extends Service {
      */
     protected void stopMQTT() {
         if( mqttSrv != null ) awareContext.stopService(mqttSrv);
-    }
-    
-    /**
-     * Retrieve setting value given key.
-     * @param String key
-     * @return String value
-     */
-    public static String getSetting( ContentResolver resolver, String key ) {
-        String value = "";
-        
-        Cursor qry = resolver.query(Aware_Settings.CONTENT_URI, null, Aware_Settings.SETTING_KEY + " LIKE '" + key + "'", null, null);
-        if( qry != null && qry.moveToFirst() ) {
-            value = qry.getString(qry.getColumnIndex(Aware_Settings.SETTING_VALUE));
-        }
-        if( qry != null && ! qry.isClosed() ) qry.close();
-        return value;
-    }
-    
-    /**
-     * Insert / Update settings of the framework
-     * @param String key
-     * @param String value
-     * @return boolean if successful
-     */
-    public static void setSetting( ContentResolver resolver, String key, Object value ) {
-        ContentValues setting = new ContentValues();
-        setting.put(Aware_Settings.SETTING_KEY, key);
-        setting.put(Aware_Settings.SETTING_VALUE, value.toString());
-        
-        Cursor qry = resolver.query(Aware_Settings.CONTENT_URI, null, Aware_Settings.SETTING_KEY + " LIKE '" + key + "'", null, null);
-        //update
-        if( qry != null && qry.moveToFirst() ) {
-            try {
-                if( ! qry.getString(qry.getColumnIndex(Aware_Settings.SETTING_VALUE)).equals(value.toString()) ) {
-                    resolver.update(Aware_Settings.CONTENT_URI, setting, Aware_Settings.SETTING_ID + "=" + qry.getInt(qry.getColumnIndex(Aware_Settings.SETTING_ID)), null);
-                    if( Aware.DEBUG) Log.d(Aware.TAG,"Updated: "+key+"="+value);
-                }
-            }catch( SQLiteException e ) {
-                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
-            }catch( SQLException e ) {
-                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
-            }
-        //insert
-        } else {
-            try {
-                resolver.insert(Aware_Settings.CONTENT_URI, setting);
-                if( Aware.DEBUG) Log.d(Aware.TAG,"Added: " + key + "=" + value);
-                qry.close();
-            }catch( SQLiteException e ) {
-                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
-            }catch( SQLException e ) {
-                if(Aware.DEBUG) Log.d(TAG,e.getMessage());
-            }
-        }
-        if( qry != null && ! qry.isClosed() ) qry.close();
     }
 }

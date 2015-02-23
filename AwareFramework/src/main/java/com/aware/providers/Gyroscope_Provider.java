@@ -43,7 +43,7 @@ public class Gyroscope_Provider extends ContentProvider {
 	/**
 	 * Authority of Gyroscope content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.gyroscope";
+	public static String AUTHORITY = "com.aware.provider.gyroscope";
 
 	// ContentProvider query paths
 	private static final int GYRO_DEV = 1;
@@ -135,14 +135,26 @@ public class Gyroscope_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -185,8 +197,10 @@ public class Gyroscope_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -223,51 +237,47 @@ public class Gyroscope_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.gyroscope";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[0],
+                GYRO_DEV);
+        sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", GYRO_DEV_ID);
+        sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[1],
+                GYRO_DATA);
+        sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", GYRO_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[0],
-				GYRO_DEV);
-		sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", GYRO_DEV_ID);
-		sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[1],
-				GYRO_DATA);
-		sUriMatcher.addURI(Gyroscope_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", GYRO_DATA_ID);
+        gyroDeviceMap = new HashMap<String, String>();
+        gyroDeviceMap.put(Gyroscope_Sensor._ID, Gyroscope_Sensor._ID);
+        gyroDeviceMap.put(Gyroscope_Sensor.TIMESTAMP,
+                Gyroscope_Sensor.TIMESTAMP);
+        gyroDeviceMap.put(Gyroscope_Sensor.DEVICE_ID,
+                Gyroscope_Sensor.DEVICE_ID);
+        gyroDeviceMap.put(Gyroscope_Sensor.MAXIMUM_RANGE,
+                Gyroscope_Sensor.MAXIMUM_RANGE);
+        gyroDeviceMap.put(Gyroscope_Sensor.MINIMUM_DELAY,
+                Gyroscope_Sensor.MINIMUM_DELAY);
+        gyroDeviceMap.put(Gyroscope_Sensor.NAME, Gyroscope_Sensor.NAME);
+        gyroDeviceMap.put(Gyroscope_Sensor.POWER_MA, Gyroscope_Sensor.POWER_MA);
+        gyroDeviceMap.put(Gyroscope_Sensor.RESOLUTION,
+                Gyroscope_Sensor.RESOLUTION);
+        gyroDeviceMap.put(Gyroscope_Sensor.TYPE, Gyroscope_Sensor.TYPE);
+        gyroDeviceMap.put(Gyroscope_Sensor.VENDOR, Gyroscope_Sensor.VENDOR);
+        gyroDeviceMap.put(Gyroscope_Sensor.VERSION, Gyroscope_Sensor.VERSION);
 
-		gyroDeviceMap = new HashMap<String, String>();
-		gyroDeviceMap.put(Gyroscope_Sensor._ID, Gyroscope_Sensor._ID);
-		gyroDeviceMap.put(Gyroscope_Sensor.TIMESTAMP,
-				Gyroscope_Sensor.TIMESTAMP);
-		gyroDeviceMap.put(Gyroscope_Sensor.DEVICE_ID,
-				Gyroscope_Sensor.DEVICE_ID);
-		gyroDeviceMap.put(Gyroscope_Sensor.MAXIMUM_RANGE,
-				Gyroscope_Sensor.MAXIMUM_RANGE);
-		gyroDeviceMap.put(Gyroscope_Sensor.MINIMUM_DELAY,
-				Gyroscope_Sensor.MINIMUM_DELAY);
-		gyroDeviceMap.put(Gyroscope_Sensor.NAME, Gyroscope_Sensor.NAME);
-		gyroDeviceMap.put(Gyroscope_Sensor.POWER_MA, Gyroscope_Sensor.POWER_MA);
-		gyroDeviceMap.put(Gyroscope_Sensor.RESOLUTION,
-				Gyroscope_Sensor.RESOLUTION);
-		gyroDeviceMap.put(Gyroscope_Sensor.TYPE, Gyroscope_Sensor.TYPE);
-		gyroDeviceMap.put(Gyroscope_Sensor.VENDOR, Gyroscope_Sensor.VENDOR);
-		gyroDeviceMap.put(Gyroscope_Sensor.VERSION, Gyroscope_Sensor.VERSION);
-
-		gyroDataMap = new HashMap<String, String>();
-		gyroDataMap.put(Gyroscope_Data._ID, Gyroscope_Data._ID);
-		gyroDataMap.put(Gyroscope_Data.TIMESTAMP, Gyroscope_Data.TIMESTAMP);
-		gyroDataMap.put(Gyroscope_Data.DEVICE_ID, Gyroscope_Data.DEVICE_ID);
-		gyroDataMap.put(Gyroscope_Data.VALUES_0, Gyroscope_Data.VALUES_0);
-		gyroDataMap.put(Gyroscope_Data.VALUES_1, Gyroscope_Data.VALUES_1);
-		gyroDataMap.put(Gyroscope_Data.VALUES_2, Gyroscope_Data.VALUES_2);
-		gyroDataMap.put(Gyroscope_Data.ACCURACY, Gyroscope_Data.ACCURACY);
-		gyroDataMap.put(Gyroscope_Data.LABEL, Gyroscope_Data.LABEL);
+        gyroDataMap = new HashMap<String, String>();
+        gyroDataMap.put(Gyroscope_Data._ID, Gyroscope_Data._ID);
+        gyroDataMap.put(Gyroscope_Data.TIMESTAMP, Gyroscope_Data.TIMESTAMP);
+        gyroDataMap.put(Gyroscope_Data.DEVICE_ID, Gyroscope_Data.DEVICE_ID);
+        gyroDataMap.put(Gyroscope_Data.VALUES_0, Gyroscope_Data.VALUES_0);
+        gyroDataMap.put(Gyroscope_Data.VALUES_1, Gyroscope_Data.VALUES_1);
+        gyroDataMap.put(Gyroscope_Data.VALUES_2, Gyroscope_Data.VALUES_2);
+        gyroDataMap.put(Gyroscope_Data.ACCURACY, Gyroscope_Data.ACCURACY);
+        gyroDataMap.put(Gyroscope_Data.LABEL, Gyroscope_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -277,8 +287,10 @@ public class Gyroscope_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -314,8 +326,11 @@ public class Gyroscope_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }		
+
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case GYRO_DEV:

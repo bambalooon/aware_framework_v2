@@ -58,6 +58,8 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
      * ContentProvider: ProximityProvider
      */
     public static final String ACTION_AWARE_PROXIMITY = "ACTION_AWARE_PROXIMITY";
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_SENSOR = "sensor";
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -67,16 +69,19 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Proximity_Data.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+        rowData.put(Proximity_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
         rowData.put(Proximity_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Proximity_Data.PROXIMITY, event.values[0]);
         rowData.put(Proximity_Data.ACCURACY, event.accuracy);
         
         try {
-            getContentResolver().insert(Proximity_Data.CONTENT_URI, rowData);
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+        		getContentResolver().insert(Proximity_Data.CONTENT_URI, rowData);
+        	}
             
-            Intent accelData = new Intent(ACTION_AWARE_PROXIMITY);
-            sendBroadcast(accelData);
+            Intent proxyData = new Intent(ACTION_AWARE_PROXIMITY);
+            proxyData.putExtra(EXTRA_DATA, rowData);
+            sendBroadcast(proxyData);
             
             if( Aware.DEBUG ) Log.d(TAG, "Proximity:"+ rowData.toString());
         }catch( SQLiteException e ) {
@@ -90,7 +95,7 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
         Cursor sensorInfo = getContentResolver().query(Proximity_Sensor.CONTENT_URI, null, null, null, null);
         if( sensorInfo == null || ! sensorInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Proximity_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Proximity_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Proximity_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Proximity_Sensor.MAXIMUM_RANGE, sensor.getMaximumRange());
             rowData.put(Proximity_Sensor.MINIMUM_DELAY, sensor.getMinDelay());
@@ -102,7 +107,14 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
             rowData.put(Proximity_Sensor.VERSION, sensor.getVersion());
             
             try {
-                getContentResolver().insert(Proximity_Sensor.CONTENT_URI, rowData);
+            	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+            		getContentResolver().insert(Proximity_Sensor.CONTENT_URI, rowData);
+            	}
+            	
+            	Intent proxy_dev = new Intent(ACTION_AWARE_PROXIMITY);
+            	proxy_dev.putExtra(EXTRA_SENSOR, rowData);
+            	sendBroadcast(proxy_dev);
+            	
                 if( Aware.DEBUG ) Log.d(TAG, "Proximity sensor: "+ rowData.toString());
             }catch( SQLiteException e ) {
                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
@@ -116,6 +128,8 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
     public void onCreate() {
         super.onCreate();
         
+        TAG = "AWARE::Proximity";
+        
         mSensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         powerManager = (PowerManager) getSystemService(POWER_SERVICE);
         
@@ -126,12 +140,12 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
             stopSelf();
         }
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):"AWARE::Proximity";
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROXIMITY));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_PROXIMITY, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROXIMITY));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_PROXIMITY, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY));
         }
         
         sensorThread = new HandlerThread(TAG);
@@ -168,18 +182,17 @@ public class Proximity extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):"AWARE::Proximity";
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):"AWARE::Proximity";
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROXIMITY));
+        	if(SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY))) {
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mProximity);
+                mSensorManager.registerListener(this, mProximity, Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY)), sensorHandler);
+            }
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_PROXIMITY, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROXIMITY));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mProximity);
-            mSensorManager.registerListener(this, mProximity, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_PROXIMITY, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROXIMITY));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Proximity service active...");

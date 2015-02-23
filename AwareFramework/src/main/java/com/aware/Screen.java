@@ -108,7 +108,8 @@ public class Screen extends Aware_Sensor {
 	public void onCreate() {
 		super.onCreate();
 		
-		TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+		TAG = "AWARE::Screen";
+		TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         
 		DATABASE_TABLES = Screen_Provider.DATABASE_TABLES;
 		TABLES_FIELDS = Screen_Provider.TABLES_FIELDS;
@@ -135,7 +136,7 @@ public class Screen extends Aware_Sensor {
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 	    
-	    TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+	    TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         
         if(Aware.DEBUG) Log.d(TAG, "Screen service active...");
         
@@ -149,7 +150,7 @@ public class Screen extends Aware_Sensor {
             if(intent.getAction().equalsIgnoreCase(Intent.ACTION_SCREEN_ON)) {
                 ContentValues rowData = new ContentValues();
                 rowData.put(Screen_Data.TIMESTAMP, System.currentTimeMillis());
-                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context.getContentResolver(),"device_id"));
+                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context,Aware_Preferences.DEVICE_ID));
                 rowData.put(Screen_Data.SCREEN_STATUS, Screen.STATUS_SCREEN_ON);
                 try {
                     context.getContentResolver().insert(Screen_Data.CONTENT_URI, rowData);
@@ -167,7 +168,7 @@ public class Screen extends Aware_Sensor {
                 
                 ContentValues rowData = new ContentValues();
                 rowData.put(Screen_Data.TIMESTAMP, System.currentTimeMillis());
-                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context.getContentResolver(),"device_id"));
+                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context,Aware_Preferences.DEVICE_ID));
                 rowData.put(Screen_Data.SCREEN_STATUS, Screen.STATUS_SCREEN_OFF);
                 try {
                     context.getContentResolver().insert(Screen_Data.CONTENT_URI, rowData);
@@ -186,7 +187,7 @@ public class Screen extends Aware_Sensor {
                 if( km.inKeyguardRestrictedInputMode() ) {
                     rowData = new ContentValues();
                     rowData.put(Screen_Data.TIMESTAMP, System.currentTimeMillis());
-                    rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context.getContentResolver(),"device_id"));
+                    rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context,Aware_Preferences.DEVICE_ID));
                     rowData.put(Screen_Data.SCREEN_STATUS, Screen.STATUS_SCREEN_LOCKED);
                     try {
                         context.getContentResolver().insert(Screen_Data.CONTENT_URI, rowData);
@@ -204,7 +205,7 @@ public class Screen extends Aware_Sensor {
             if(intent.getAction().equals(Intent.ACTION_USER_PRESENT)) {
                 ContentValues rowData = new ContentValues();
                 rowData.put(Screen_Data.TIMESTAMP, System.currentTimeMillis());
-                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context.getContentResolver(),"device_id"));
+                rowData.put(Screen_Data.DEVICE_ID, Aware.getSetting(context,Aware_Preferences.DEVICE_ID));
                 rowData.put(Screen_Data.SCREEN_STATUS, Screen.STATUS_SCREEN_UNLOCKED);
                 try {
                     context.getContentResolver().insert(Screen_Data.CONTENT_URI, rowData);

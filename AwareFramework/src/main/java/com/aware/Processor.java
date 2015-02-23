@@ -90,7 +90,7 @@ public class Processor extends Aware_Sensor {
             
             ContentValues rowData = new ContentValues();
             rowData.put(Processor_Data.TIMESTAMP, System.currentTimeMillis());
-            rowData.put(Processor_Data.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Processor_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Processor_Data.LAST_USER, processorNow.get("user"));
             rowData.put(Processor_Data.LAST_SYSTEM, processorNow.get("system"));
             rowData.put(Processor_Data.LAST_IDLE, processorNow.get("idle"));
@@ -121,7 +121,7 @@ public class Processor extends Aware_Sensor {
             	sendBroadcast(relaxed);
             }
             
-            PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_PROCESSOR));
+            PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_PROCESSOR));
             mHandler.postDelayed(mRunnable, PROCESSOR_UPDATE * 1000);
 		}
 	};
@@ -156,9 +156,9 @@ public class Processor extends Aware_Sensor {
     public void onCreate() {
         super.onCreate();
         
-        TAG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):"AWARE::Processor";
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):"AWARE::Processor";
         
-        PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROCESSOR));
+        PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROCESSOR));
         
         DATABASE_TABLES = Processor_Provider.DATABASE_TABLES;
         TABLES_FIELDS = Processor_Provider.TABLES_FIELDS;
@@ -170,10 +170,10 @@ public class Processor extends Aware_Sensor {
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        TAG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG):"AWARE::Processor";
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG):"AWARE::Processor";
         
-        if( Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROCESSOR)) != PROCESSOR_UPDATE ) {
-            PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_PROCESSOR));
+        if( Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROCESSOR)) != PROCESSOR_UPDATE ) {
+            PROCESSOR_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_PROCESSOR));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Processor service active...");

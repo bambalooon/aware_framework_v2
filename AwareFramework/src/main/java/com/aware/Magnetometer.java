@@ -63,6 +63,8 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
      * ContentProvider: MagnetometerProvider
      */
     public static final String ACTION_AWARE_MAGNETOMETER = "ACTION_AWARE_MAGNETOMETER";
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_SENSOR = "sensor";
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -72,7 +74,7 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Magnetometer_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+        rowData.put(Magnetometer_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(Magnetometer_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Magnetometer_Data.VALUES_0, event.values[0]);
         rowData.put(Magnetometer_Data.VALUES_1, event.values[1]);
@@ -80,9 +82,12 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
         rowData.put(Magnetometer_Data.ACCURACY, event.accuracy);
         
         try {
-            getContentResolver().insert(Magnetometer_Data.CONTENT_URI, rowData);
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+        		getContentResolver().insert(Magnetometer_Data.CONTENT_URI, rowData);
+        	}
             
             Intent magnetoData = new Intent(ACTION_AWARE_MAGNETOMETER);
+            magnetoData.putExtra(EXTRA_DATA, rowData);
             sendBroadcast(magnetoData);
             
             if( Aware.DEBUG ) Log.d(TAG, "Magnetometer:"+ rowData.toString());
@@ -97,7 +102,7 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
         Cursor sensorInfo = getContentResolver().query(Magnetometer_Sensor.CONTENT_URI, null, null, null, null);
         if( sensorInfo == null || ! sensorInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Magnetometer_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Magnetometer_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Magnetometer_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Magnetometer_Sensor.MAXIMUM_RANGE, sensor.getMaximumRange());
             rowData.put(Magnetometer_Sensor.MINIMUM_DELAY, sensor.getMinDelay());
@@ -109,7 +114,14 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
             rowData.put(Magnetometer_Sensor.VERSION, sensor.getVersion());
             
             try {
-                getContentResolver().insert(Magnetometer_Sensor.CONTENT_URI, rowData);
+            	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+            		getContentResolver().insert(Magnetometer_Sensor.CONTENT_URI, rowData);
+            	}
+            	
+            	Intent magneto_dev = new Intent(ACTION_AWARE_MAGNETOMETER);
+            	magneto_dev.putExtra(EXTRA_SENSOR, rowData);
+            	sendBroadcast(magneto_dev);
+            	
                 if( Aware.DEBUG ) Log.d(TAG, "Magnetometer sensor: "+ rowData.toString());
             }catch( SQLiteException e ) {
                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
@@ -133,12 +145,12 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
             stopSelf();
         }
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_MAGNETOMETER, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_MAGNETOMETER, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
         }
         
         DATABASE_TABLES = Magnetometer_Provider.DATABASE_TABLES;
@@ -175,18 +187,17 @@ public class Magnetometer extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
+        	if(SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER))) {
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mMagnetometer);
+                mSensorManager.registerListener(this, mMagnetometer, Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER)), sensorHandler);
+            }
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_MAGNETOMETER, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mMagnetometer);
-            mSensorManager.registerListener(this, mMagnetometer, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_MAGNETOMETER, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_MAGNETOMETER));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Magnetometer service active...");

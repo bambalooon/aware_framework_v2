@@ -66,7 +66,7 @@ public class Traffic extends Aware_Sensor {
 			
 			ContentValues wifi = new ContentValues();
 			wifi.put(Traffic_Data.TIMESTAMP, System.currentTimeMillis());
-			wifi.put(Traffic_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+			wifi.put(Traffic_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
 			wifi.put(Traffic_Data.NETWORK_TYPE, NETWORK_TYPE_WIFI);
 			wifi.put(Traffic_Data.RECEIVED_BYTES, d_wifiRxBytes);
 			wifi.put(Traffic_Data.SENT_BYTES, d_wifiTxBytes);
@@ -76,7 +76,7 @@ public class Traffic extends Aware_Sensor {
 			
 			ContentValues network = new ContentValues();
 			network.put(Traffic_Data.TIMESTAMP, System.currentTimeMillis());
-			network.put(Traffic_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+			network.put(Traffic_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
 			network.put(Traffic_Data.NETWORK_TYPE, NETWORK_TYPE_MOBILE);
 			network.put(Traffic_Data.RECEIVED_BYTES, d_mobileRxBytes);
 			network.put(Traffic_Data.SENT_BYTES, d_mobileTxBytes);
@@ -104,7 +104,7 @@ public class Traffic extends Aware_Sensor {
 			wifiRxPackets = TrafficStats.getTotalRxPackets() - mobileRxPackets;
 			wifiTxPackets = TrafficStats.getTotalTxPackets() - mobileTxPackets;
 			
-			NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_traffic"));
+			NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_NETWORK_TRAFFIC));
 			
 			mHandler.postDelayed( mRunnable, NETWORK_TRAFFIC_UPDATE_INTERVAL * 1000 );
 		}
@@ -158,8 +158,8 @@ public class Traffic extends Aware_Sensor {
 	public void onCreate() {
 		super.onCreate();
 		
-		TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
-		NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_traffic"));
+		TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+		NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_NETWORK_TRAFFIC));
         
 		startTotalRxBytes = TrafficStats.getTotalRxBytes();
 		startTotalTxBytes = TrafficStats.getTotalTxBytes();
@@ -171,7 +171,7 @@ public class Traffic extends Aware_Sensor {
 		CONTEXT_URIS = new Uri[] { Traffic_Data.CONTENT_URI };
  		
 		if( startTotalRxBytes == TrafficStats.UNSUPPORTED ) {
-			Aware.setSetting(getContentResolver(), Aware_Preferences.STATUS_NETWORK_TRAFFIC, false);
+			Aware.setSetting(getApplicationContext(), Aware_Preferences.STATUS_NETWORK_TRAFFIC, false);
 			Intent apply = new Intent(Aware.ACTION_AWARE_REFRESH);
 			sendBroadcast(apply);
 		
@@ -196,8 +196,8 @@ public class Traffic extends Aware_Sensor {
 	@Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-	    TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
-	    NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getContentResolver(),"frequency_traffic"));
+	    TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+	    NETWORK_TRAFFIC_UPDATE_INTERVAL = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_NETWORK_TRAFFIC));
 	    
         if ( Aware.DEBUG ) Log.d(TAG, "Traffic service active...");
         

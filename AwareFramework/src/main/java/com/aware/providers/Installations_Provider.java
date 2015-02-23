@@ -43,7 +43,7 @@ public class Installations_Provider extends ContentProvider {
 	/**
 	 * Authority of Installations content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.installations";
+	public static String AUTHORITY = "com.aware.provider.installations";
 
 	// ContentProvider query paths
 	private static final int INSTALLATIONS = 1;
@@ -92,14 +92,26 @@ public class Installations_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -132,8 +144,10 @@ public class Installations_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -156,32 +170,28 @@ public class Installations_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.installations";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Installations_Provider.AUTHORITY,
+                DATABASE_TABLES[0], INSTALLATIONS);
+        sUriMatcher.addURI(Installations_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", INSTALLATIONS_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Installations_Provider.AUTHORITY,
-				DATABASE_TABLES[0], INSTALLATIONS);
-		sUriMatcher.addURI(Installations_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", INSTALLATIONS_ID);
-
-		installationsMap = new HashMap<String, String>();
-		installationsMap.put(Installations_Data._ID, Installations_Data._ID);
-		installationsMap.put(Installations_Data.TIMESTAMP,
-				Installations_Data.TIMESTAMP);
-		installationsMap.put(Installations_Data.DEVICE_ID,
-				Installations_Data.DEVICE_ID);
-		installationsMap.put(Installations_Data.PACKAGE_NAME,
-				Installations_Data.PACKAGE_NAME);
-		installationsMap.put(Installations_Data.APPLICATION_NAME,
-				Installations_Data.APPLICATION_NAME);
-		installationsMap.put(Installations_Data.INSTALLATION_STATUS,
-				Installations_Data.INSTALLATION_STATUS);
+        installationsMap = new HashMap<String, String>();
+        installationsMap.put(Installations_Data._ID, Installations_Data._ID);
+        installationsMap.put(Installations_Data.TIMESTAMP,
+                Installations_Data.TIMESTAMP);
+        installationsMap.put(Installations_Data.DEVICE_ID,
+                Installations_Data.DEVICE_ID);
+        installationsMap.put(Installations_Data.PACKAGE_NAME,
+                Installations_Data.PACKAGE_NAME);
+        installationsMap.put(Installations_Data.APPLICATION_NAME,
+                Installations_Data.APPLICATION_NAME);
+        installationsMap.put(Installations_Data.INSTALLATION_STATUS,
+                Installations_Data.INSTALLATION_STATUS);
+	    
+		return true;
 	}
 
 	/**
@@ -191,8 +201,10 @@ public class Installations_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -222,8 +234,10 @@ public class Installations_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {

@@ -63,6 +63,8 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
      * ContentProvider: Gravity_Provider
      */
     public static final String ACTION_AWARE_GRAVITY = "ACTION_AWARE_GRAVITY";
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_SENSOR = "sensor";
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -72,7 +74,7 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Gravity_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+        rowData.put(Gravity_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(Gravity_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Gravity_Data.VALUES_0, event.values[0]);
         rowData.put(Gravity_Data.VALUES_1, event.values[1]);
@@ -80,9 +82,12 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
         rowData.put(Gravity_Data.ACCURACY, event.accuracy);
         
         try {
-            getContentResolver().insert(Gravity_Data.CONTENT_URI, rowData);
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+        		getContentResolver().insert(Gravity_Data.CONTENT_URI, rowData);
+        	}
             
             Intent gravityData = new Intent(ACTION_AWARE_GRAVITY);
+            gravityData.putExtra(EXTRA_DATA, rowData);
             sendBroadcast(gravityData);
             
             if( Aware.DEBUG ) Log.d(TAG, "Gravity:"+ rowData.toString());
@@ -97,7 +102,7 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
         Cursor sensorInfo = getContentResolver().query(Gravity_Sensor.CONTENT_URI, null, null, null, null);
         if( sensorInfo == null || ! sensorInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Gravity_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+            rowData.put(Gravity_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
             rowData.put(Gravity_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Gravity_Sensor.MAXIMUM_RANGE, sensor.getMaximumRange());
             rowData.put(Gravity_Sensor.MINIMUM_DELAY, sensor.getMinDelay());
@@ -109,7 +114,14 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
             rowData.put(Gravity_Sensor.VERSION, sensor.getVersion());
             
             try {
-                getContentResolver().insert(Gravity_Sensor.CONTENT_URI, rowData);
+            	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+            		getContentResolver().insert(Gravity_Sensor.CONTENT_URI, rowData);
+            	}
+            	
+            	Intent grav_dev = new Intent(ACTION_AWARE_GRAVITY);
+            	grav_dev.putExtra(EXTRA_SENSOR, rowData);
+            	sendBroadcast(grav_dev);
+            	
                 if( Aware.DEBUG ) Log.d(TAG, "Gravity sensor: "+ rowData.toString());
             }catch( SQLiteException e ) {
                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
@@ -133,12 +145,12 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
             stopSelf();
         }
         
-        TAG = Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY));
         }catch(NumberFormatException e) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY));
         }
         
         sensorThread = new HandlerThread(TAG);
@@ -176,18 +188,17 @@ public class Gravity extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY));
+        	if( SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY))) { //changed setting
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mGravity);
+                mSensorManager.registerListener(this, mGravity, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY)), sensorHandler);
+            }
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY));
         }catch(NumberFormatException e) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_GRAVITY));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mGravity);
-            mSensorManager.registerListener(this, mGravity, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_GRAVITY));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Gravity service active...");

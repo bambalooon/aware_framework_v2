@@ -42,7 +42,7 @@ public class Network_Provider extends ContentProvider {
 	/**
 	 * Authority of Screen content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.network";
+	public static String AUTHORITY = "com.aware.provider.network";
 
 	// ContentProvider query paths
 	private static final int NETWORK = 1;
@@ -89,14 +89,26 @@ public class Network_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -131,8 +143,10 @@ public class Network_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -158,29 +172,25 @@ public class Network_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.network";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Network_Provider.AUTHORITY, DATABASE_TABLES[0],
+                NETWORK);
+        sUriMatcher.addURI(Network_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", NETWORK_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Network_Provider.AUTHORITY, DATABASE_TABLES[0],
-				NETWORK);
-		sUriMatcher.addURI(Network_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", NETWORK_ID);
-
-		networkProjectionMap = new HashMap<String, String>();
-		networkProjectionMap.put(Network_Data._ID, Network_Data._ID);
-		networkProjectionMap
-				.put(Network_Data.TIMESTAMP, Network_Data.TIMESTAMP);
-		networkProjectionMap
-				.put(Network_Data.DEVICE_ID, Network_Data.DEVICE_ID);
-		networkProjectionMap.put(Network_Data.TYPE, Network_Data.TYPE);
-		networkProjectionMap.put(Network_Data.SUBTYPE, Network_Data.SUBTYPE);
-		networkProjectionMap.put(Network_Data.STATE, Network_Data.STATE);
+        networkProjectionMap = new HashMap<String, String>();
+        networkProjectionMap.put(Network_Data._ID, Network_Data._ID);
+        networkProjectionMap
+                .put(Network_Data.TIMESTAMP, Network_Data.TIMESTAMP);
+        networkProjectionMap
+                .put(Network_Data.DEVICE_ID, Network_Data.DEVICE_ID);
+        networkProjectionMap.put(Network_Data.TYPE, Network_Data.TYPE);
+        networkProjectionMap.put(Network_Data.SUBTYPE, Network_Data.SUBTYPE);
+        networkProjectionMap.put(Network_Data.STATE, Network_Data.STATE);
+	    
+		return true;
 	}
 
 	/**
@@ -190,8 +200,10 @@ public class Network_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -222,8 +234,10 @@ public class Network_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {

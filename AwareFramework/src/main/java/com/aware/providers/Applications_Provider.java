@@ -43,7 +43,7 @@ public class Applications_Provider extends ContentProvider {
 	/**
 	 * Authority of Application content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.applications";
+	public static String AUTHORITY = "com.aware.provider.applications";
 
 	// ContentProvider query paths
 	private static final int FOREGROUND = 1;
@@ -232,14 +232,26 @@ public class Applications_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -296,8 +308,10 @@ public class Applications_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -353,107 +367,103 @@ public class Applications_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.applications";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[0],
+                FOREGROUND);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", FOREGROUND_ID);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[1],
+                APPLICATIONS);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", APPLICATIONS_ID);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[2],
+                NOTIFICATIONS);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[2]
+                + "/#", NOTIFICATIONS_ID);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[3],
+                ERROR);
+        sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[3]
+                + "/#", ERROR_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[0],
-				FOREGROUND);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", FOREGROUND_ID);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[1],
-				APPLICATIONS);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", APPLICATIONS_ID);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[2],
-				NOTIFICATIONS);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[2]
-				+ "/#", NOTIFICATIONS_ID);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[3],
-				ERROR);
-		sUriMatcher.addURI(Applications_Provider.AUTHORITY, DATABASE_TABLES[3]
-				+ "/#", ERROR_ID);
+        foregroundMap = new HashMap<String, String>();
+        foregroundMap.put(Applications_Foreground._ID,
+                Applications_Foreground._ID);
+        foregroundMap.put(Applications_Foreground.TIMESTAMP,
+                Applications_Foreground.TIMESTAMP);
+        foregroundMap.put(Applications_Foreground.DEVICE_ID,
+                Applications_Foreground.DEVICE_ID);
+        foregroundMap.put(Applications_Foreground.PACKAGE_NAME,
+                Applications_Foreground.PACKAGE_NAME);
+        foregroundMap.put(Applications_Foreground.APPLICATION_NAME,
+                Applications_Foreground.APPLICATION_NAME);
+        foregroundMap.put(Applications_Foreground.IS_SYSTEM_APP,
+                Applications_Foreground.IS_SYSTEM_APP);
 
-		foregroundMap = new HashMap<String, String>();
-		foregroundMap.put(Applications_Foreground._ID,
-				Applications_Foreground._ID);
-		foregroundMap.put(Applications_Foreground.TIMESTAMP,
-				Applications_Foreground.TIMESTAMP);
-		foregroundMap.put(Applications_Foreground.DEVICE_ID,
-				Applications_Foreground.DEVICE_ID);
-		foregroundMap.put(Applications_Foreground.PACKAGE_NAME,
-				Applications_Foreground.PACKAGE_NAME);
-		foregroundMap.put(Applications_Foreground.APPLICATION_NAME,
-				Applications_Foreground.APPLICATION_NAME);
-		foregroundMap.put(Applications_Foreground.IS_SYSTEM_APP,
-				Applications_Foreground.IS_SYSTEM_APP);
+        applicationsMap = new HashMap<String, String>();
+        applicationsMap.put(Applications_History._ID, Applications_History._ID);
+        applicationsMap.put(Applications_History.TIMESTAMP,
+                Applications_History.TIMESTAMP);
+        applicationsMap.put(Applications_History.DEVICE_ID,
+                Applications_History.DEVICE_ID);
+        applicationsMap.put(Applications_History.PACKAGE_NAME,
+                Applications_History.PACKAGE_NAME);
+        applicationsMap.put(Applications_History.APPLICATION_NAME,
+                Applications_History.APPLICATION_NAME);
+        applicationsMap.put(Applications_History.PROCESS_IMPORTANCE,
+                Applications_History.PROCESS_IMPORTANCE);
+        applicationsMap.put(Applications_History.PROCESS_ID,
+                Applications_History.PROCESS_ID);
+        applicationsMap.put(Applications_History.END_TIMESTAMP,
+                Applications_History.END_TIMESTAMP);
+        applicationsMap.put(Applications_History.IS_SYSTEM_APP,
+                Applications_History.IS_SYSTEM_APP);
 
-		applicationsMap = new HashMap<String, String>();
-		applicationsMap.put(Applications_History._ID, Applications_History._ID);
-		applicationsMap.put(Applications_History.TIMESTAMP,
-				Applications_History.TIMESTAMP);
-		applicationsMap.put(Applications_History.DEVICE_ID,
-				Applications_History.DEVICE_ID);
-		applicationsMap.put(Applications_History.PACKAGE_NAME,
-				Applications_History.PACKAGE_NAME);
-		applicationsMap.put(Applications_History.APPLICATION_NAME,
-				Applications_History.APPLICATION_NAME);
-		applicationsMap.put(Applications_History.PROCESS_IMPORTANCE,
-				Applications_History.PROCESS_IMPORTANCE);
-		applicationsMap.put(Applications_History.PROCESS_ID,
-				Applications_History.PROCESS_ID);
-		applicationsMap.put(Applications_History.END_TIMESTAMP,
-				Applications_History.END_TIMESTAMP);
-		applicationsMap.put(Applications_History.IS_SYSTEM_APP,
-				Applications_History.IS_SYSTEM_APP);
+        notificationMap = new HashMap<String, String>();
+        notificationMap.put(Applications_Notifications._ID,
+                Applications_Notifications._ID);
+        notificationMap.put(Applications_Notifications.TIMESTAMP,
+                Applications_Notifications.TIMESTAMP);
+        notificationMap.put(Applications_Notifications.DEVICE_ID,
+                Applications_Notifications.DEVICE_ID);
+        notificationMap.put(Applications_Notifications.PACKAGE_NAME,
+                Applications_Notifications.PACKAGE_NAME);
+        notificationMap.put(Applications_Notifications.APPLICATION_NAME,
+                Applications_Notifications.APPLICATION_NAME);
+        notificationMap.put(Applications_Notifications.TEXT,
+                Applications_Notifications.TEXT);
+        notificationMap.put(Applications_Notifications.SOUND,
+                Applications_Notifications.SOUND);
+        notificationMap.put(Applications_Notifications.VIBRATE,
+                Applications_Notifications.VIBRATE);
+        notificationMap.put(Applications_Notifications.FLAGS,
+                Applications_Notifications.FLAGS);
+        notificationMap.put(Applications_Notifications.DEFAULTS,
+                Applications_Notifications.DEFAULTS);
 
-		notificationMap = new HashMap<String, String>();
-		notificationMap.put(Applications_Notifications._ID,
-				Applications_Notifications._ID);
-		notificationMap.put(Applications_Notifications.TIMESTAMP,
-				Applications_Notifications.TIMESTAMP);
-		notificationMap.put(Applications_Notifications.DEVICE_ID,
-				Applications_Notifications.DEVICE_ID);
-		notificationMap.put(Applications_Notifications.PACKAGE_NAME,
-				Applications_Notifications.PACKAGE_NAME);
-		notificationMap.put(Applications_Notifications.APPLICATION_NAME,
-				Applications_Notifications.APPLICATION_NAME);
-		notificationMap.put(Applications_Notifications.TEXT,
-				Applications_Notifications.TEXT);
-		notificationMap.put(Applications_Notifications.SOUND,
-				Applications_Notifications.SOUND);
-		notificationMap.put(Applications_Notifications.VIBRATE,
-				Applications_Notifications.VIBRATE);
-		notificationMap.put(Applications_Notifications.FLAGS,
-				Applications_Notifications.FLAGS);
-		notificationMap.put(Applications_Notifications.DEFAULTS,
-				Applications_Notifications.DEFAULTS);
-
-		crashesMap = new HashMap<String, String>();
-		crashesMap.put(Applications_Crashes._ID, Applications_Crashes._ID);
-		crashesMap.put(Applications_Crashes.TIMESTAMP,
-				Applications_Crashes.TIMESTAMP);
-		crashesMap.put(Applications_Crashes.DEVICE_ID,
-				Applications_Crashes.DEVICE_ID);
-		crashesMap.put(Applications_Crashes.PACKAGE_NAME,
-				Applications_Crashes.PACKAGE_NAME);
-		crashesMap.put(Applications_Crashes.APPLICATION_NAME,
-				Applications_Crashes.APPLICATION_NAME);
-		crashesMap.put(Applications_Crashes.APPLICATION_VERSION,
-				Applications_Crashes.APPLICATION_VERSION);
-		crashesMap.put(Applications_Crashes.ERROR_SHORT,
-				Applications_Crashes.ERROR_SHORT);
-		crashesMap.put(Applications_Crashes.ERROR_LONG,
-				Applications_Crashes.ERROR_LONG);
-		crashesMap.put(Applications_Crashes.ERROR_CONDITION,
-				Applications_Crashes.ERROR_CONDITION);
-		crashesMap.put(Applications_Crashes.IS_SYSTEM_APP,
-				Applications_Crashes.IS_SYSTEM_APP);
+        crashesMap = new HashMap<String, String>();
+        crashesMap.put(Applications_Crashes._ID, Applications_Crashes._ID);
+        crashesMap.put(Applications_Crashes.TIMESTAMP,
+                Applications_Crashes.TIMESTAMP);
+        crashesMap.put(Applications_Crashes.DEVICE_ID,
+                Applications_Crashes.DEVICE_ID);
+        crashesMap.put(Applications_Crashes.PACKAGE_NAME,
+                Applications_Crashes.PACKAGE_NAME);
+        crashesMap.put(Applications_Crashes.APPLICATION_NAME,
+                Applications_Crashes.APPLICATION_NAME);
+        crashesMap.put(Applications_Crashes.APPLICATION_VERSION,
+                Applications_Crashes.APPLICATION_VERSION);
+        crashesMap.put(Applications_Crashes.ERROR_SHORT,
+                Applications_Crashes.ERROR_SHORT);
+        crashesMap.put(Applications_Crashes.ERROR_LONG,
+                Applications_Crashes.ERROR_LONG);
+        crashesMap.put(Applications_Crashes.ERROR_CONDITION,
+                Applications_Crashes.ERROR_CONDITION);
+        crashesMap.put(Applications_Crashes.IS_SYSTEM_APP,
+                Applications_Crashes.IS_SYSTEM_APP);
+	    
+		return true;
 	}
 
 	/**
@@ -463,8 +473,10 @@ public class Applications_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -506,8 +518,10 @@ public class Applications_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {

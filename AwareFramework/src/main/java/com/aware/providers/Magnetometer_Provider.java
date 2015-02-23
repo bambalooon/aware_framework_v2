@@ -43,7 +43,7 @@ public class Magnetometer_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.magnetometer";
+	public static String AUTHORITY = "com.aware.provider.magnetometer";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -141,13 +141,25 @@ public class Magnetometer_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -189,8 +201,10 @@ public class Magnetometer_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -227,60 +241,56 @@ public class Magnetometer_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.magnetometer";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", SENSOR_DEV_ID);
+        sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", SENSOR_DEV_ID);
-		sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Magnetometer_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", SENSOR_DATA_ID);
+        sensorDeviceMap = new HashMap<String, String>();
+        sensorDeviceMap.put(Magnetometer_Sensor._ID, Magnetometer_Sensor._ID);
+        sensorDeviceMap.put(Magnetometer_Sensor.TIMESTAMP,
+                Magnetometer_Sensor.TIMESTAMP);
+        sensorDeviceMap.put(Magnetometer_Sensor.DEVICE_ID,
+                Magnetometer_Sensor.DEVICE_ID);
+        sensorDeviceMap.put(Magnetometer_Sensor.MAXIMUM_RANGE,
+                Magnetometer_Sensor.MAXIMUM_RANGE);
+        sensorDeviceMap.put(Magnetometer_Sensor.MINIMUM_DELAY,
+                Magnetometer_Sensor.MINIMUM_DELAY);
+        sensorDeviceMap.put(Magnetometer_Sensor.NAME, Magnetometer_Sensor.NAME);
+        sensorDeviceMap.put(Magnetometer_Sensor.POWER_MA,
+                Magnetometer_Sensor.POWER_MA);
+        sensorDeviceMap.put(Magnetometer_Sensor.RESOLUTION,
+                Magnetometer_Sensor.RESOLUTION);
+        sensorDeviceMap.put(Magnetometer_Sensor.TYPE, Magnetometer_Sensor.TYPE);
+        sensorDeviceMap.put(Magnetometer_Sensor.VENDOR,
+                Magnetometer_Sensor.VENDOR);
+        sensorDeviceMap.put(Magnetometer_Sensor.VERSION,
+                Magnetometer_Sensor.VERSION);
 
-		sensorDeviceMap = new HashMap<String, String>();
-		sensorDeviceMap.put(Magnetometer_Sensor._ID, Magnetometer_Sensor._ID);
-		sensorDeviceMap.put(Magnetometer_Sensor.TIMESTAMP,
-				Magnetometer_Sensor.TIMESTAMP);
-		sensorDeviceMap.put(Magnetometer_Sensor.DEVICE_ID,
-				Magnetometer_Sensor.DEVICE_ID);
-		sensorDeviceMap.put(Magnetometer_Sensor.MAXIMUM_RANGE,
-				Magnetometer_Sensor.MAXIMUM_RANGE);
-		sensorDeviceMap.put(Magnetometer_Sensor.MINIMUM_DELAY,
-				Magnetometer_Sensor.MINIMUM_DELAY);
-		sensorDeviceMap.put(Magnetometer_Sensor.NAME, Magnetometer_Sensor.NAME);
-		sensorDeviceMap.put(Magnetometer_Sensor.POWER_MA,
-				Magnetometer_Sensor.POWER_MA);
-		sensorDeviceMap.put(Magnetometer_Sensor.RESOLUTION,
-				Magnetometer_Sensor.RESOLUTION);
-		sensorDeviceMap.put(Magnetometer_Sensor.TYPE, Magnetometer_Sensor.TYPE);
-		sensorDeviceMap.put(Magnetometer_Sensor.VENDOR,
-				Magnetometer_Sensor.VENDOR);
-		sensorDeviceMap.put(Magnetometer_Sensor.VERSION,
-				Magnetometer_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Magnetometer_Data._ID, Magnetometer_Data._ID);
-		sensorDataMap.put(Magnetometer_Data.TIMESTAMP,
-				Magnetometer_Data.TIMESTAMP);
-		sensorDataMap.put(Magnetometer_Data.DEVICE_ID,
-				Magnetometer_Data.DEVICE_ID);
-		sensorDataMap.put(Magnetometer_Data.VALUES_0,
-				Magnetometer_Data.VALUES_0);
-		sensorDataMap.put(Magnetometer_Data.VALUES_1,
-				Magnetometer_Data.VALUES_1);
-		sensorDataMap.put(Magnetometer_Data.VALUES_2,
-				Magnetometer_Data.VALUES_2);
-		sensorDataMap.put(Magnetometer_Data.ACCURACY,
-				Magnetometer_Data.ACCURACY);
-		sensorDataMap.put(Magnetometer_Data.LABEL, Magnetometer_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Magnetometer_Data._ID, Magnetometer_Data._ID);
+        sensorDataMap.put(Magnetometer_Data.TIMESTAMP,
+                Magnetometer_Data.TIMESTAMP);
+        sensorDataMap.put(Magnetometer_Data.DEVICE_ID,
+                Magnetometer_Data.DEVICE_ID);
+        sensorDataMap.put(Magnetometer_Data.VALUES_0,
+                Magnetometer_Data.VALUES_0);
+        sensorDataMap.put(Magnetometer_Data.VALUES_1,
+                Magnetometer_Data.VALUES_1);
+        sensorDataMap.put(Magnetometer_Data.VALUES_2,
+                Magnetometer_Data.VALUES_2);
+        sensorDataMap.put(Magnetometer_Data.ACCURACY,
+                Magnetometer_Data.ACCURACY);
+        sensorDataMap.put(Magnetometer_Data.LABEL, Magnetometer_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -289,8 +299,10 @@ public class Magnetometer_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -325,8 +337,10 @@ public class Magnetometer_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

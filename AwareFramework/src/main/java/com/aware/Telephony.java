@@ -110,7 +110,7 @@ public class Telephony extends Aware_Sensor {
         telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
         mContext = getApplicationContext();
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):"AWARE::Telephony";
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):"AWARE::Telephony";
         
         DATABASE_TABLES = Telephony_Provider.DATABASE_TABLES;
         TABLES_FIELDS = Telephony_Provider.TABLES_FIELDS;
@@ -124,7 +124,7 @@ public class Telephony extends Aware_Sensor {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):"AWARE::Telephony";
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):"AWARE::Telephony";
         
         if(Aware.DEBUG) Log.d(TAG,"Telephony service active...");
         
@@ -162,7 +162,7 @@ public class Telephony extends Aware_Sensor {
             
             if ( lastSignalStrength == null ) return;
             
-            String device_id = Aware.getSetting(mContext.getContentResolver(),"device_id");
+            String device_id = Aware.getSetting(mContext,Aware_Preferences.DEVICE_ID);
             
             if( location instanceof GsmCellLocation ) {
                 GsmCellLocation loc = (GsmCellLocation) location;

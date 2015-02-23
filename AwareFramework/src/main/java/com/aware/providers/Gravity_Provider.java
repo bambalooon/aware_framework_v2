@@ -42,7 +42,7 @@ public class Gravity_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.gravity";
+	public static String AUTHORITY = "com.aware.provider.gravity";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -140,13 +140,25 @@ public class Gravity_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -188,8 +200,10 @@ public class Gravity_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -226,49 +240,45 @@ public class Gravity_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.gravity";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", SENSOR_DEV_ID);
+        sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", SENSOR_DEV_ID);
-		sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Gravity_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", SENSOR_DATA_ID);
+        sensorDeviceMap = new HashMap<String, String>();
+        sensorDeviceMap.put(Gravity_Sensor._ID, Gravity_Sensor._ID);
+        sensorDeviceMap.put(Gravity_Sensor.TIMESTAMP, Gravity_Sensor.TIMESTAMP);
+        sensorDeviceMap.put(Gravity_Sensor.DEVICE_ID, Gravity_Sensor.DEVICE_ID);
+        sensorDeviceMap.put(Gravity_Sensor.MAXIMUM_RANGE,
+                Gravity_Sensor.MAXIMUM_RANGE);
+        sensorDeviceMap.put(Gravity_Sensor.MINIMUM_DELAY,
+                Gravity_Sensor.MINIMUM_DELAY);
+        sensorDeviceMap.put(Gravity_Sensor.NAME, Gravity_Sensor.NAME);
+        sensorDeviceMap.put(Gravity_Sensor.POWER_MA, Gravity_Sensor.POWER_MA);
+        sensorDeviceMap.put(Gravity_Sensor.RESOLUTION,
+                Gravity_Sensor.RESOLUTION);
+        sensorDeviceMap.put(Gravity_Sensor.TYPE, Gravity_Sensor.TYPE);
+        sensorDeviceMap.put(Gravity_Sensor.VENDOR, Gravity_Sensor.VENDOR);
+        sensorDeviceMap.put(Gravity_Sensor.VERSION, Gravity_Sensor.VERSION);
 
-		sensorDeviceMap = new HashMap<String, String>();
-		sensorDeviceMap.put(Gravity_Sensor._ID, Gravity_Sensor._ID);
-		sensorDeviceMap.put(Gravity_Sensor.TIMESTAMP, Gravity_Sensor.TIMESTAMP);
-		sensorDeviceMap.put(Gravity_Sensor.DEVICE_ID, Gravity_Sensor.DEVICE_ID);
-		sensorDeviceMap.put(Gravity_Sensor.MAXIMUM_RANGE,
-				Gravity_Sensor.MAXIMUM_RANGE);
-		sensorDeviceMap.put(Gravity_Sensor.MINIMUM_DELAY,
-				Gravity_Sensor.MINIMUM_DELAY);
-		sensorDeviceMap.put(Gravity_Sensor.NAME, Gravity_Sensor.NAME);
-		sensorDeviceMap.put(Gravity_Sensor.POWER_MA, Gravity_Sensor.POWER_MA);
-		sensorDeviceMap.put(Gravity_Sensor.RESOLUTION,
-				Gravity_Sensor.RESOLUTION);
-		sensorDeviceMap.put(Gravity_Sensor.TYPE, Gravity_Sensor.TYPE);
-		sensorDeviceMap.put(Gravity_Sensor.VENDOR, Gravity_Sensor.VENDOR);
-		sensorDeviceMap.put(Gravity_Sensor.VERSION, Gravity_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Gravity_Data._ID, Gravity_Data._ID);
-		sensorDataMap.put(Gravity_Data.TIMESTAMP, Gravity_Data.TIMESTAMP);
-		sensorDataMap.put(Gravity_Data.DEVICE_ID, Gravity_Data.DEVICE_ID);
-		sensorDataMap.put(Gravity_Data.VALUES_0, Gravity_Data.VALUES_0);
-		sensorDataMap.put(Gravity_Data.VALUES_1, Gravity_Data.VALUES_1);
-		sensorDataMap.put(Gravity_Data.VALUES_2, Gravity_Data.VALUES_2);
-		sensorDataMap.put(Gravity_Data.ACCURACY, Gravity_Data.ACCURACY);
-		sensorDataMap.put(Gravity_Data.LABEL, Gravity_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Gravity_Data._ID, Gravity_Data._ID);
+        sensorDataMap.put(Gravity_Data.TIMESTAMP, Gravity_Data.TIMESTAMP);
+        sensorDataMap.put(Gravity_Data.DEVICE_ID, Gravity_Data.DEVICE_ID);
+        sensorDataMap.put(Gravity_Data.VALUES_0, Gravity_Data.VALUES_0);
+        sensorDataMap.put(Gravity_Data.VALUES_1, Gravity_Data.VALUES_1);
+        sensorDataMap.put(Gravity_Data.VALUES_2, Gravity_Data.VALUES_2);
+        sensorDataMap.put(Gravity_Data.ACCURACY, Gravity_Data.ACCURACY);
+        sensorDataMap.put(Gravity_Data.LABEL, Gravity_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -277,8 +287,11 @@ public class Gravity_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -313,8 +326,12 @@ public class Gravity_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

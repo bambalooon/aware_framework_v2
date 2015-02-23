@@ -88,11 +88,6 @@ public class Applications extends AccessibilityService {
     public static final String ACTION_AWARE_APPLICATIONS_CRASHES = "ACTION_AWARE_APPLICATIONS_CRASHES";
     
     /**
-     * How often we check what is running on the background (default = 30 seconds)
-     */
-    public static final int BACKGROUND_APPS_UPDATE_FREQUENCY = 30;
-    
-    /**
      * Clones an AccessibilityEvent
      */
     private AccessibilityEvent clone(AccessibilityEvent event) {
@@ -144,7 +139,7 @@ public class Applications extends AccessibilityService {
      */
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_NOTIFICATIONS).equals("true") && event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ) {
+        if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_NOTIFICATIONS).equals("true") && event.getEventType() == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED ) {
         	
         	//FIXED: Duplicated accessibility events. Because we have the accessibility service both in manifest as well as in service for compabitility with Honeycomb and Gingerbread...
         	if( lastNotification != null && ( lastNotification.getPackageName().toString().equalsIgnoreCase(event.getPackageName().toString()) || (lastNotification.getText().size()>0 && event.getText().size()>0 && lastNotification.getText().get(0).equals(event.getText().get(0))) )) {
@@ -155,7 +150,7 @@ public class Applications extends AccessibilityService {
         	
         	if( notificationDetails != null ) {
         		ContentValues rowData = new ContentValues();
-        		rowData.put(Applications_Notifications.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+        		rowData.put(Applications_Notifications.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
             	rowData.put(Applications_Notifications.TIMESTAMP, System.currentTimeMillis());
             	rowData.put(Applications_Notifications.PACKAGE_NAME, event.getPackageName().toString());
             	rowData.put(Applications_Notifications.APPLICATION_NAME, getApplicationName(event.getPackageName().toString()));
@@ -175,12 +170,12 @@ public class Applications extends AccessibilityService {
         	lastNotification = clone(event);
         }
         
-    	if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_APPLICATIONS).equals("true") && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ) {
+    	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_APPLICATIONS).equals("true") && event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ) {
             if( updateApps == null ) {
                 updateApps = new Intent(getApplicationContext(), BackgroundService.class);
                 updateApps.setAction(ACTION_AWARE_APPLICATIONS_HISTORY);
                 repeatingIntent = PendingIntent.getService(getApplicationContext(), 0, updateApps, 0);
-                alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, BACKGROUND_APPS_UPDATE_FREQUENCY * 1000, repeatingIntent);
+                alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS)) * 1000, repeatingIntent);
             }
             
             //FIXED: Duplicated accessibility events. This is caused by accessibility service definition in xml (Android >2.3) and in code (Android 2.3)
@@ -198,10 +193,10 @@ public class Applications extends AccessibilityService {
                 appInfo = null;
             }
             String appName = ( appInfo != null ) ? (String) packageManager.getApplicationLabel(appInfo):"";
-        
+            
             ContentValues rowData = new ContentValues();
             rowData.put(Applications_Foreground.TIMESTAMP, System.currentTimeMillis());
-            rowData.put(Applications_Foreground.DEVICE_ID, Aware.getSetting(getContentResolver(),Aware_Preferences.DEVICE_ID));
+            rowData.put(Applications_Foreground.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Applications_Foreground.PACKAGE_NAME, event.getPackageName().toString());
             rowData.put(Applications_Foreground.APPLICATION_NAME, appName);
             rowData.put(Applications_Foreground.IS_SYSTEM_APP, isSystemPackage(pkgInfo));
@@ -221,9 +216,8 @@ public class Applications extends AccessibilityService {
             Intent newForeground = new Intent(ACTION_AWARE_APPLICATIONS_FOREGROUND);
             sendBroadcast(newForeground);
             
-            if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_CRASHES).equals("true") ) {
-            	
-                //Check if there is a crashed application
+            if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_CRASHES).equals("true") ) {
+            	//Check if there is a crashed application
 	            ActivityManager activityMng = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
 	            List<ProcessErrorStateInfo> errors = activityMng.getProcessesInErrorState();
 	            if(errors != null ) {
@@ -236,7 +230,7 @@ public class Applications extends AccessibilityService {
 							
 							ContentValues crashData = new ContentValues();
 		            		crashData.put(Applications_Crashes.TIMESTAMP, System.currentTimeMillis());
-		            		crashData.put(Applications_Crashes.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+		            		crashData.put(Applications_Crashes.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
 		            		crashData.put(Applications_Crashes.PACKAGE_NAME, error.processName);
 		            		crashData.put(Applications_Crashes.APPLICATION_NAME, appName);
 		            		crashData.put(Applications_Crashes.APPLICATION_VERSION, pkgInfo.versionCode);
@@ -280,18 +274,22 @@ public class Applications extends AccessibilityService {
         
         alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
         
-        TAG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG):TAG;
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG):TAG;
         
         IntentFilter filter = new IntentFilter();
-        filter.addAction(Aware.ACTION_AWARE_WEBSERVICE);
-        filter.addAction(Aware.ACTION_AWARE_CLEAN_DATABASES);
+        filter.addAction(Aware.ACTION_AWARE_SYNC_DATA);
+        filter.addAction(Aware.ACTION_AWARE_CLEAR_DATA);
         registerReceiver(awareMonitor, filter);
         
-        if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_APPLICATIONS).equals("true") ) {
+        if( Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS).length() == 0 ) {
+        	Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS, 30);
+        }
+        
+        if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_APPLICATIONS).equals("true") ) {
             updateApps = new Intent(getApplicationContext(), BackgroundService.class);
             updateApps.setAction(ACTION_AWARE_APPLICATIONS_HISTORY);
             repeatingIntent = PendingIntent.getService(getApplicationContext(), 0, updateApps, 0);
-            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, BACKGROUND_APPS_UPDATE_FREQUENCY * 1000, repeatingIntent);
+            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS)) * 1000, repeatingIntent);
         }
         
         //Boot-up AWARE framework
@@ -314,16 +312,37 @@ public class Applications extends AccessibilityService {
             startActivity(accessibilitySettings);
         }
         
+        if( Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS).length() == 0 ) {
+        	Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS, 30);
+        }
+        
         //Boot-up AWARE framework
         Intent aware = new Intent(this, Aware.class);
         startService(aware);
     }
     
     @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+    	
+    	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS).length() == 0 ) {
+        	Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS, 30);
+        }
+    	
+    	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_APPLICATIONS).equals("true") ) {
+            updateApps = new Intent(getApplicationContext(), BackgroundService.class);
+            updateApps.setAction(ACTION_AWARE_APPLICATIONS_HISTORY);
+            repeatingIntent = PendingIntent.getService(getApplicationContext(), 0, updateApps, 0);
+            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis()+1000, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_APPLICATIONS)) * 1000, repeatingIntent);
+        }
+    	
+    	return super.onStartCommand(intent, flags, startId);
+    }
+    
+    @Override
     public void onDestroy() {
         super.onDestroy();
         
-        Aware.setSetting(getContentResolver(), Aware_Preferences.STATUS_APPLICATIONS, false);
+        Aware.setSetting(getApplicationContext(), Aware_Preferences.STATUS_APPLICATIONS, false);
         alarmManager.cancel(repeatingIntent);
         unregisterReceiver(awareMonitor);
     }
@@ -361,7 +380,7 @@ public class Applications extends AccessibilityService {
         	String[] TABLES_FIELDS = Applications_Provider.TABLES_FIELDS;
         	Uri[] CONTEXT_URIS = new Uri[]{ Applications_Foreground.CONTENT_URI, Applications_History.CONTENT_URI, Applications_Notifications.CONTENT_URI, Applications_Crashes.CONTENT_URI };
         	
-        	if( intent.getAction().equals(Aware.ACTION_AWARE_WEBSERVICE) ) {
+        	if( intent.getAction().equals(Aware.ACTION_AWARE_SYNC_DATA) ) {
         		for( int i=0; i<DATABASE_TABLES.length; i++ ) {
         			Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_SYNC_TABLE);
         			webserviceHelper.putExtra(WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[i]);
@@ -371,14 +390,14 @@ public class Applications extends AccessibilityService {
         		}
             }
             
-            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAN_DATABASES)) {
+            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAR_DATA)) {
             	for( int i=0; i<DATABASE_TABLES.length; i++) {
             		//Clear locally
             		context.getContentResolver().delete(CONTEXT_URIS[i], null, null);
             		if( Aware.DEBUG ) Log.d(TAG,"Cleared " + CONTEXT_URIS[i].toString());
             		
             		//Clear remotely
-            		if( Aware.getSetting(context.getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
+            		if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
 	            		Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_CLEAR_TABLE);
 	            		webserviceHelper.putExtra(WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[i]);
 	            		context.startService(webserviceHelper);
@@ -405,7 +424,7 @@ public class Applications extends AccessibilityService {
         protected void onHandleIntent(Intent intent) {
             
             //Updating list of running applications/services
-            if( Aware.getSetting(getContentResolver(), Aware_Preferences.STATUS_APPLICATIONS ).equals("true") && intent.getAction().equals(ACTION_AWARE_APPLICATIONS_HISTORY) ) {
+            if( Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_APPLICATIONS ).equals("true") && intent.getAction().equals(ACTION_AWARE_APPLICATIONS_HISTORY) ) {
                 
                 ActivityManager activityManager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
                 PackageManager packageManager = (PackageManager) getPackageManager();
@@ -415,14 +434,11 @@ public class Applications extends AccessibilityService {
                     
                 for( RunningAppProcessInfo app : runningApps ) {
                     
-                    Cursor appUnclosed = null;
-                    PackageInfo appPkg = null;
-                    ApplicationInfo appInfo = null;
-                    
+                	Cursor appUnclosed = null;
+                	
                     try {
-                        
-                        appPkg = packageManager.getPackageInfo(app.processName, PackageManager.GET_META_DATA);
-                        appInfo = packageManager.getApplicationInfo(app.processName, PackageManager.GET_ACTIVITIES);
+                        PackageInfo appPkg = packageManager.getPackageInfo(app.processName, PackageManager.GET_META_DATA);
+                        ApplicationInfo appInfo = packageManager.getApplicationInfo(app.processName, PackageManager.GET_ACTIVITIES);
                         
                         String appName = ( appInfo != null ) ? (String) packageManager.getApplicationLabel(appInfo):"";
                         
@@ -430,7 +446,7 @@ public class Applications extends AccessibilityService {
                         if( appUnclosed == null || appUnclosed.moveToFirst() == false ) {
                             ContentValues rowData = new ContentValues();
                             rowData.put(Applications_History.TIMESTAMP, System.currentTimeMillis());
-                            rowData.put(Applications_History.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+                            rowData.put(Applications_History.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
                             rowData.put(Applications_History.PACKAGE_NAME, app.processName);
                             rowData.put(Applications_History.APPLICATION_NAME, appName);
                             rowData.put(Applications_History.PROCESS_IMPORTANCE, app.importance);
@@ -445,7 +461,7 @@ public class Applications extends AccessibilityService {
                                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
                             }
                         } else if( appUnclosed.getInt(appUnclosed.getColumnIndex(Applications_History.PROCESS_IMPORTANCE)) != app.importance ) {
-                            //Close last importance
+                        	//Close last importance
                             ContentValues rowData = new ContentValues();
                             rowData.put(Applications_History.END_TIMESTAMP, System.currentTimeMillis());
                             try {
@@ -456,10 +472,12 @@ public class Applications extends AccessibilityService {
                                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
                             }
                             
+                            if( appUnclosed != null && ! appUnclosed.isClosed() ) appUnclosed.close();
+                            
                             //Insert new importance
                             rowData = new ContentValues();
                             rowData.put(Applications_History.TIMESTAMP, System.currentTimeMillis());
-                            rowData.put(Applications_History.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+                            rowData.put(Applications_History.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
                             rowData.put(Applications_History.PACKAGE_NAME, app.processName);
                             rowData.put(Applications_History.APPLICATION_NAME, appName);
                             rowData.put(Applications_History.PROCESS_IMPORTANCE, app.importance);
@@ -477,7 +495,7 @@ public class Applications extends AccessibilityService {
                     }catch(PackageManager.NameNotFoundException e) {
                     }catch( IllegalStateException e ) {
                     } finally {
-                        if( appUnclosed != null && ! appUnclosed.isClosed() ) appUnclosed.close();
+                    	if( appUnclosed != null && ! appUnclosed.isClosed() ) appUnclosed.close();
                     }
                 }
                     
@@ -534,6 +552,7 @@ public class Applications extends AccessibilityService {
      * @return boolean
      */
     private static boolean isSystemPackage(PackageInfo pkgInfo) {
+        if( pkgInfo == null ) return false;
         return ((pkgInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) == 1);
     }
 }

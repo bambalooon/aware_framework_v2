@@ -42,7 +42,7 @@ public class Battery_Provider extends ContentProvider {
 	/**
 	 * Authority of Battery content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.battery";
+	public static String AUTHORITY = "com.aware.provider.battery";
 
 	// ContentProvider query paths
 	private static final int BATTERY = 1;
@@ -159,14 +159,26 @@ public class Battery_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -216,8 +228,10 @@ public class Battery_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -267,72 +281,68 @@ public class Battery_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.battery";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[0],
+                BATTERY);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", BATTERY_ID);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[1],
+                BATTERY_DISCHARGE);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", BATTERY_DISCHARGE_ID);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[2],
+                BATTERY_CHARGE);
+        sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[2]
+                + "/#", BATTERY_CHARGE_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[0],
-				BATTERY);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", BATTERY_ID);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[1],
-				BATTERY_DISCHARGE);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", BATTERY_DISCHARGE_ID);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[2],
-				BATTERY_CHARGE);
-		sUriMatcher.addURI(Battery_Provider.AUTHORITY, DATABASE_TABLES[2]
-				+ "/#", BATTERY_CHARGE_ID);
+        batteryProjectionMap = new HashMap<String, String>();
+        batteryProjectionMap.put(Battery_Data._ID, Battery_Data._ID);
+        batteryProjectionMap
+                .put(Battery_Data.TIMESTAMP, Battery_Data.TIMESTAMP);
+        batteryProjectionMap
+                .put(Battery_Data.DEVICE_ID, Battery_Data.DEVICE_ID);
+        batteryProjectionMap.put(Battery_Data.STATUS, Battery_Data.STATUS);
+        batteryProjectionMap.put(Battery_Data.LEVEL, Battery_Data.LEVEL);
+        batteryProjectionMap.put(Battery_Data.SCALE, Battery_Data.SCALE);
+        batteryProjectionMap.put(Battery_Data.VOLTAGE, Battery_Data.VOLTAGE);
+        batteryProjectionMap.put(Battery_Data.TEMPERATURE,
+                Battery_Data.TEMPERATURE);
+        batteryProjectionMap.put(Battery_Data.PLUG_ADAPTOR,
+                Battery_Data.PLUG_ADAPTOR);
+        batteryProjectionMap.put(Battery_Data.HEALTH, Battery_Data.HEALTH);
+        batteryProjectionMap.put(Battery_Data.TECHNOLOGY,
+                Battery_Data.TECHNOLOGY);
 
-		batteryProjectionMap = new HashMap<String, String>();
-		batteryProjectionMap.put(Battery_Data._ID, Battery_Data._ID);
-		batteryProjectionMap
-				.put(Battery_Data.TIMESTAMP, Battery_Data.TIMESTAMP);
-		batteryProjectionMap
-				.put(Battery_Data.DEVICE_ID, Battery_Data.DEVICE_ID);
-		batteryProjectionMap.put(Battery_Data.STATUS, Battery_Data.STATUS);
-		batteryProjectionMap.put(Battery_Data.LEVEL, Battery_Data.LEVEL);
-		batteryProjectionMap.put(Battery_Data.SCALE, Battery_Data.SCALE);
-		batteryProjectionMap.put(Battery_Data.VOLTAGE, Battery_Data.VOLTAGE);
-		batteryProjectionMap.put(Battery_Data.TEMPERATURE,
-				Battery_Data.TEMPERATURE);
-		batteryProjectionMap.put(Battery_Data.PLUG_ADAPTOR,
-				Battery_Data.PLUG_ADAPTOR);
-		batteryProjectionMap.put(Battery_Data.HEALTH, Battery_Data.HEALTH);
-		batteryProjectionMap.put(Battery_Data.TECHNOLOGY,
-				Battery_Data.TECHNOLOGY);
+        batteryDischargesMap = new HashMap<String, String>();
+        batteryDischargesMap
+                .put(Battery_Discharges._ID, Battery_Discharges._ID);
+        batteryDischargesMap.put(Battery_Discharges.TIMESTAMP,
+                Battery_Discharges.TIMESTAMP);
+        batteryDischargesMap.put(Battery_Discharges.DEVICE_ID,
+                Battery_Discharges.DEVICE_ID);
+        batteryDischargesMap.put(Battery_Discharges.BATTERY_START,
+                Battery_Discharges.BATTERY_START);
+        batteryDischargesMap.put(Battery_Discharges.BATTERY_END,
+                Battery_Discharges.BATTERY_END);
+        batteryDischargesMap.put(Battery_Discharges.END_TIMESTAMP,
+                Battery_Discharges.END_TIMESTAMP);
 
-		batteryDischargesMap = new HashMap<String, String>();
-		batteryDischargesMap
-				.put(Battery_Discharges._ID, Battery_Discharges._ID);
-		batteryDischargesMap.put(Battery_Discharges.TIMESTAMP,
-				Battery_Discharges.TIMESTAMP);
-		batteryDischargesMap.put(Battery_Discharges.DEVICE_ID,
-				Battery_Discharges.DEVICE_ID);
-		batteryDischargesMap.put(Battery_Discharges.BATTERY_START,
-				Battery_Discharges.BATTERY_START);
-		batteryDischargesMap.put(Battery_Discharges.BATTERY_END,
-				Battery_Discharges.BATTERY_END);
-		batteryDischargesMap.put(Battery_Discharges.END_TIMESTAMP,
-				Battery_Discharges.END_TIMESTAMP);
-
-		batteryChargesMap = new HashMap<String, String>();
-		batteryChargesMap.put(Battery_Charges._ID, Battery_Charges._ID);
-		batteryChargesMap.put(Battery_Charges.TIMESTAMP,
-				Battery_Charges.TIMESTAMP);
-		batteryChargesMap.put(Battery_Charges.DEVICE_ID,
-				Battery_Charges.DEVICE_ID);
-		batteryChargesMap.put(Battery_Charges.BATTERY_START,
-				Battery_Charges.BATTERY_START);
-		batteryChargesMap.put(Battery_Charges.BATTERY_END,
-				Battery_Charges.BATTERY_END);
-		batteryChargesMap.put(Battery_Charges.END_TIMESTAMP,
-				Battery_Charges.END_TIMESTAMP);
+        batteryChargesMap = new HashMap<String, String>();
+        batteryChargesMap.put(Battery_Charges._ID, Battery_Charges._ID);
+        batteryChargesMap.put(Battery_Charges.TIMESTAMP,
+                Battery_Charges.TIMESTAMP);
+        batteryChargesMap.put(Battery_Charges.DEVICE_ID,
+                Battery_Charges.DEVICE_ID);
+        batteryChargesMap.put(Battery_Charges.BATTERY_START,
+                Battery_Charges.BATTERY_START);
+        batteryChargesMap.put(Battery_Charges.BATTERY_END,
+                Battery_Charges.BATTERY_END);
+        batteryChargesMap.put(Battery_Charges.END_TIMESTAMP,
+                Battery_Charges.END_TIMESTAMP);
+	    
+		return true;
 	}
 
 	/**
@@ -342,8 +352,10 @@ public class Battery_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -381,8 +393,10 @@ public class Battery_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count;
 		switch (sUriMatcher.match(uri)) {

@@ -26,6 +26,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.DialogFragment;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
@@ -42,6 +43,7 @@ import android.widget.RatingBar;
 import android.widget.TextView;
 
 import com.aware.Aware;
+import com.aware.Aware_Preferences;
 import com.aware.ESM;
 import com.aware.R;
 import com.aware.providers.ESM_Provider.ESM_Data;
@@ -72,17 +74,26 @@ public class ESM_UI extends DialogFragment {
 	@Override
 	public Dialog onCreateDialog(Bundle savedInstanceState) {
 		
-		getActivity().getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-		
+//		getActivity().getWindow().setType(WindowManager.LayoutParams.TYPE_PRIORITY_PHONE);
+//		getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+//        getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED);
+//        getActivity().getWindow().addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+        
 		builder = new AlertDialog.Builder(getActivity());
 		inflater = (LayoutInflater) getActivity().getSystemService(Context.LAYOUT_INFLATER_SERVICE);
 		inputManager = (InputMethodManager) getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
 		
-		TAG = Aware.getSetting(getActivity().getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getActivity().getContentResolver(),"debug_tag"):TAG;
+		TAG = Aware.getSetting(getActivity().getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getActivity().getApplicationContext(), Aware_Preferences.DEBUG_TAG):TAG;
 		
 		Cursor visible_esm = getActivity().getContentResolver().query(ESM_Data.CONTENT_URI, null, ESM_Data.STATUS + "=" + ESM.STATUS_NEW, null, ESM_Data.TIMESTAMP + " ASC LIMIT 1");
         if( visible_esm != null && visible_esm.moveToFirst() ) {
         	esm_id = visible_esm.getInt(visible_esm.getColumnIndex(ESM_Data._ID));
+        	
+        	//Fixed: set the esm as not new anymore, to avoid displaying the same ESM twice due to changes in orientation
+        	ContentValues update_state = new ContentValues();
+        	update_state.put(ESM_Data.STATUS, ESM.STATUS_VISIBLE);
+        	getActivity().getContentResolver().update(ESM_Data.CONTENT_URI, update_state, ESM_Data._ID +"="+ esm_id, null);
+        	
         	esm_type = visible_esm.getInt(visible_esm.getColumnIndex(ESM_Data.TYPE));
         	expires_seconds = visible_esm.getInt(visible_esm.getColumnIndex(ESM_Data.EXPIRATION_THREASHOLD));
         	
@@ -170,6 +181,8 @@ public class ESM_UI extends DialogFragment {
 	                                    final Dialog editOther = new Dialog(getActivity());
 	                                	editOther.setTitle("Can you be more specific, please?");
 	                                	editOther.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
+	                                	editOther.getWindow().setGravity(Gravity.TOP);
+                                        editOther.getWindow().setLayout(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
 	                                	
 	                                	LinearLayout editor = new LinearLayout(getActivity());
 	                                    editor.setOrientation(LinearLayout.VERTICAL);
@@ -253,7 +266,9 @@ public class ESM_UI extends DialogFragment {
 	                                            	final Dialog editOther = new Dialog(getActivity());
 	        	                                	editOther.setTitle("Can you be more specific, please?");
 	        	                                	editOther.getWindow().setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT);
-	                                            	
+	        	                                	editOther.getWindow().setGravity(Gravity.TOP);
+	        	                                	editOther.getWindow().setLayout(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+	        	                                	
 	                                            	LinearLayout editor = new LinearLayout(getActivity());
 	                                                editor.setOrientation(LinearLayout.VERTICAL);
 	                                                editOther.setContentView(editor);
@@ -420,6 +435,10 @@ public class ESM_UI extends DialogFragment {
             expire_monitor = new ESMExpireMonitor( System.currentTimeMillis(), expires_seconds, esm_id );
             expire_monitor.execute();
         }
+        
+        //Fixed: doesn't dismiss the dialog if touched outside or ghost touches
+        current_dialog.setCanceledOnTouchOutside(false);
+        
         return current_dialog;
 	}
 
@@ -464,8 +483,7 @@ public class ESM_UI extends DialogFragment {
         protected Void doInBackground(Void... params) {
         	while( (System.currentTimeMillis()-display_timestamp) / 1000 <= expires_in_seconds ) {
                 if( isCancelled() ) {
-                	
-                	Cursor esm = sContext.getContentResolver().query(ESM_Data.CONTENT_URI, null, ESM_Data._ID + "=" + esm_id, null, null);
+                	Cursor esm = sContext.getContentResolver().query(ESM_Data.CONTENT_URI, null, ESM_Data._ID + "=" + esm_id, null, null );
                 	if( esm != null && esm.moveToFirst() ) {
                 		int status = esm.getInt(esm.getColumnIndex(ESM_Data.STATUS));
                 		switch(status) {

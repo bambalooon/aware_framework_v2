@@ -71,7 +71,7 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Temperature_Data.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+        rowData.put(Temperature_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
         rowData.put(Temperature_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Temperature_Data.TEMPERATURE_CELSIUS, event.values[0]);
         rowData.put(Temperature_Data.ACCURACY, event.accuracy);
@@ -94,7 +94,7 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
         Cursor sensorInfo = getContentResolver().query(Temperature_Sensor.CONTENT_URI, null, null, null, null);
         if( sensorInfo == null || ! sensorInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Temperature_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Temperature_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Temperature_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Temperature_Sensor.MAXIMUM_RANGE, sensor.getMaximumRange());
             rowData.put(Temperature_Sensor.MINIMUM_DELAY, sensor.getMinDelay());
@@ -130,12 +130,12 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
             mTemperature = mSensorManager.getDefaultSensor(Sensor.TYPE_AMBIENT_TEMPERATURE);
         }
     
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TEMPERATURE));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TEMPERATURE));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE));
         }
         
         sensorThread = new HandlerThread(TAG);
@@ -173,18 +173,17 @@ public class Temperature extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TEMPERATURE));
+        	if(SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE))) {
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mTemperature);
+                mSensorManager.registerListener(this, mTemperature, Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE)), sensorHandler);
+            }
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TEMPERATURE));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mTemperature);
-            mSensorManager.registerListener(this, mTemperature, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TEMPERATURE, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TEMPERATURE));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Temperature service active...");

@@ -10,6 +10,8 @@ See the GNU General Public License for more details: http://www.gnu.org/licenses
 */
 package com.aware.utils;
 
+import java.util.Calendar;
+
 import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -71,17 +73,18 @@ public class Aware_Plugin extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        TAG = Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
-        DEBUG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_FLAG).equals("true")?true:false;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+        DEBUG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_FLAG).equals("true")?true:false;
         
         if( DEBUG ) Log.d(TAG, TAG + " plugin created!");
         
         //Register Context Broadcaster
         IntentFilter filter = new IntentFilter();
         filter.addAction(Aware.ACTION_AWARE_CURRENT_CONTEXT);
-        filter.addAction(Aware.ACTION_AWARE_WEBSERVICE);
-        filter.addAction(Aware.ACTION_AWARE_CLEAN_DATABASES);
+        filter.addAction(Aware.ACTION_AWARE_SYNC_DATA);
+        filter.addAction(Aware.ACTION_AWARE_CLEAR_DATA);
         filter.addAction(Aware.ACTION_AWARE_STOP_SENSORS);
+        filter.addAction(Aware.ACTION_AWARE_SPACE_MAINTENANCE);
         registerReceiver(contextBroadcaster, filter);
     }
     
@@ -97,8 +100,8 @@ public class Aware_Plugin extends Service {
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        TAG = Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):TAG;
-        DEBUG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_FLAG).equals("true")?true:false;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
+        DEBUG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_FLAG).equals("true")?true:false;
         if(DEBUG) Log.d(TAG, TAG + " plugin active...");
         return START_STICKY;
     }
@@ -118,6 +121,7 @@ public class Aware_Plugin extends Service {
      * - ACTION_AWARE_WEBSERVICE: push content provider data remotely
      * - ACTION_AWARE_CLEAN_DATABASES: clears local and remote database
      * - ACTION_AWARE_STOP_SENSORS: stops this plugin
+     * - ACTION_AWARE_SPACE_MAINTENANCE: clears old data from content providers
      * @author denzil
      */
     public class ContextBroadcaster extends BroadcastReceiver {
@@ -128,8 +132,7 @@ public class Aware_Plugin extends Service {
                     CONTEXT_PRODUCER.onContext();
                 }
             }
-            if( intent.getAction().equals(Aware.ACTION_AWARE_WEBSERVICE) 
-            		&& Aware.getSetting(context.getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
+            if( intent.getAction().equals(Aware.ACTION_AWARE_SYNC_DATA) && Aware.getSetting(getApplicationContext(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
             	if( DATABASE_TABLES != null && TABLES_FIELDS != null && CONTEXT_URIS != null) {
             		for( int i=0; i<DATABASE_TABLES.length; i++ ) {
             			Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_SYNC_TABLE);
@@ -142,7 +145,7 @@ public class Aware_Plugin extends Service {
             		if( Aware.DEBUG ) Log.d(TAG,"No database to backup!");
             	}
             }
-            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAN_DATABASES)) {
+            if( intent.getAction().equals(Aware.ACTION_AWARE_CLEAR_DATA)) {
             	if( DATABASE_TABLES != null && CONTEXT_URIS != null ) {
             		for( int i=0; i<DATABASE_TABLES.length; i++) {
 	            		//Clear locally
@@ -150,7 +153,7 @@ public class Aware_Plugin extends Service {
 	            		if( Aware.DEBUG ) Log.d(TAG,"Cleared " + CONTEXT_URIS[i].toString());
 	            		
 	            		//Clear remotely
-	            		if( Aware.getSetting(context.getContentResolver(), Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
+	            		if( Aware.getSetting(context, Aware_Preferences.STATUS_WEBSERVICE).equals("true") ) {
 		            		Intent webserviceHelper = new Intent(WebserviceHelper.ACTION_AWARE_WEBSERVICE_CLEAR_TABLE);
 		            		webserviceHelper.putExtra(WebserviceHelper.EXTRA_TABLE, DATABASE_TABLES[i]);
 		            		context.startService(webserviceHelper);
@@ -161,6 +164,41 @@ public class Aware_Plugin extends Service {
             if( intent.getAction().equals(Aware.ACTION_AWARE_STOP_SENSORS)) {
             	if( Aware.DEBUG ) Log.d(TAG, TAG + " stopped");
             	stopSelf();
+            }
+            
+            String frequency_old = Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA);
+            if(frequency_old.length() == 0) Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA, 0);
+            
+            if(intent.getAction().equals(Aware.ACTION_AWARE_SPACE_MAINTENANCE) && ! Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA).equals("0") ) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTimeInMillis(System.currentTimeMillis());
+                
+                switch(Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_CLEAN_OLD_DATA))) {
+                    case 1: //weekly
+                        if( DATABASE_TABLES != null && CONTEXT_URIS != null ) {
+                            cal.add(Calendar.DAY_OF_YEAR, -7);
+                            if( Aware.DEBUG ) Log.d(TAG, TAG + " cleaning locally any data older than last week (yyyy/mm/dd): "+cal.get(Calendar.YEAR)+'/'+(cal.get(Calendar.MONTH)+1)+'/'+cal.get(Calendar.DAY_OF_MONTH));
+                            for( int i=0; i<DATABASE_TABLES.length; i++) {
+                                //Clear locally
+                                String where = "timestamp < " + cal.getTimeInMillis(); 
+                                int rowsDeleted = context.getContentResolver().delete(CONTEXT_URIS[i], where, null);
+                                if( Aware.DEBUG ) Log.d(TAG,"Cleaned " +rowsDeleted+ " from " + CONTEXT_URIS[i].toString());
+                            }
+                        }
+                        break;
+                    case 2: //monthly
+                        if( DATABASE_TABLES != null && CONTEXT_URIS != null ) {
+                            cal.add(Calendar.MONTH, -1);
+                            if( Aware.DEBUG ) Log.d(TAG, TAG + " cleaning locally any data older than last month (yyyy/mm/dd): "+cal.get(Calendar.YEAR)+'/'+(cal.get(Calendar.MONTH)+1)+'/'+cal.get(Calendar.DAY_OF_MONTH));
+                            for( int i=0; i<DATABASE_TABLES.length; i++) {
+                                //Clear locally
+                                String where = "timestamp < " + cal.getTimeInMillis(); 
+                                int rowsDeleted = context.getContentResolver().delete(CONTEXT_URIS[i], where, null);
+                                if( Aware.DEBUG ) Log.d(TAG,"Cleaned " +rowsDeleted+ " from " + CONTEXT_URIS[i].toString());
+                            }
+                        }
+                        break;
+                }
             }
         }
     }

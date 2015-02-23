@@ -43,7 +43,7 @@ public class Rotation_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.rotation";
+	public static String AUTHORITY = "com.aware.provider.rotation";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -143,13 +143,25 @@ public class Rotation_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -191,8 +203,10 @@ public class Rotation_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -229,49 +243,45 @@ public class Rotation_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.rotation";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", SENSOR_DEV_ID);
+        sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", SENSOR_DEV_ID);
-		sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Rotation_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", SENSOR_DATA_ID);
+        sensorMap = new HashMap<String, String>();
+        sensorMap.put(Rotation_Sensor._ID, Rotation_Sensor._ID);
+        sensorMap.put(Rotation_Sensor.TIMESTAMP, Rotation_Sensor.TIMESTAMP);
+        sensorMap.put(Rotation_Sensor.DEVICE_ID, Rotation_Sensor.DEVICE_ID);
+        sensorMap.put(Rotation_Sensor.MAXIMUM_RANGE,
+                Rotation_Sensor.MAXIMUM_RANGE);
+        sensorMap.put(Rotation_Sensor.MINIMUM_DELAY,
+                Rotation_Sensor.MINIMUM_DELAY);
+        sensorMap.put(Rotation_Sensor.NAME, Rotation_Sensor.NAME);
+        sensorMap.put(Rotation_Sensor.POWER_MA, Rotation_Sensor.POWER_MA);
+        sensorMap.put(Rotation_Sensor.RESOLUTION, Rotation_Sensor.RESOLUTION);
+        sensorMap.put(Rotation_Sensor.TYPE, Rotation_Sensor.TYPE);
+        sensorMap.put(Rotation_Sensor.VENDOR, Rotation_Sensor.VENDOR);
+        sensorMap.put(Rotation_Sensor.VERSION, Rotation_Sensor.VERSION);
 
-		sensorMap = new HashMap<String, String>();
-		sensorMap.put(Rotation_Sensor._ID, Rotation_Sensor._ID);
-		sensorMap.put(Rotation_Sensor.TIMESTAMP, Rotation_Sensor.TIMESTAMP);
-		sensorMap.put(Rotation_Sensor.DEVICE_ID, Rotation_Sensor.DEVICE_ID);
-		sensorMap.put(Rotation_Sensor.MAXIMUM_RANGE,
-				Rotation_Sensor.MAXIMUM_RANGE);
-		sensorMap.put(Rotation_Sensor.MINIMUM_DELAY,
-				Rotation_Sensor.MINIMUM_DELAY);
-		sensorMap.put(Rotation_Sensor.NAME, Rotation_Sensor.NAME);
-		sensorMap.put(Rotation_Sensor.POWER_MA, Rotation_Sensor.POWER_MA);
-		sensorMap.put(Rotation_Sensor.RESOLUTION, Rotation_Sensor.RESOLUTION);
-		sensorMap.put(Rotation_Sensor.TYPE, Rotation_Sensor.TYPE);
-		sensorMap.put(Rotation_Sensor.VENDOR, Rotation_Sensor.VENDOR);
-		sensorMap.put(Rotation_Sensor.VERSION, Rotation_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Rotation_Data._ID, Rotation_Data._ID);
-		sensorDataMap.put(Rotation_Data.TIMESTAMP, Rotation_Data.TIMESTAMP);
-		sensorDataMap.put(Rotation_Data.DEVICE_ID, Rotation_Data.DEVICE_ID);
-		sensorDataMap.put(Rotation_Data.VALUES_0, Rotation_Data.VALUES_0);
-		sensorDataMap.put(Rotation_Data.VALUES_1, Rotation_Data.VALUES_1);
-		sensorDataMap.put(Rotation_Data.VALUES_2, Rotation_Data.VALUES_2);
-		sensorDataMap.put(Rotation_Data.VALUES_3, Rotation_Data.VALUES_3);
-		sensorDataMap.put(Rotation_Data.ACCURACY, Rotation_Data.ACCURACY);
-		sensorDataMap.put(Rotation_Data.LABEL, Rotation_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Rotation_Data._ID, Rotation_Data._ID);
+        sensorDataMap.put(Rotation_Data.TIMESTAMP, Rotation_Data.TIMESTAMP);
+        sensorDataMap.put(Rotation_Data.DEVICE_ID, Rotation_Data.DEVICE_ID);
+        sensorDataMap.put(Rotation_Data.VALUES_0, Rotation_Data.VALUES_0);
+        sensorDataMap.put(Rotation_Data.VALUES_1, Rotation_Data.VALUES_1);
+        sensorDataMap.put(Rotation_Data.VALUES_2, Rotation_Data.VALUES_2);
+        sensorDataMap.put(Rotation_Data.VALUES_3, Rotation_Data.VALUES_3);
+        sensorDataMap.put(Rotation_Data.ACCURACY, Rotation_Data.ACCURACY);
+        sensorDataMap.put(Rotation_Data.LABEL, Rotation_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -280,8 +290,10 @@ public class Rotation_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -316,8 +328,10 @@ public class Rotation_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

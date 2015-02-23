@@ -42,7 +42,7 @@ public class ESM_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.esm";
+	public static String AUTHORITY = "com.aware.provider.esm";
 
 	// ContentProvider query paths
 	private static final int ESMS_QUEUE = 1;
@@ -109,13 +109,25 @@ public class ESM_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -149,8 +161,10 @@ public class ESM_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -174,41 +188,37 @@ public class ESM_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.esm";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(ESM_Provider.AUTHORITY, DATABASE_TABLES[0],
+                ESMS_QUEUE);
+        sUriMatcher.addURI(ESM_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
+                ESMS_QUEUE_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(ESM_Provider.AUTHORITY, DATABASE_TABLES[0],
-				ESMS_QUEUE);
-		sUriMatcher.addURI(ESM_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
-				ESMS_QUEUE_ID);
-
-		questionsMap = new HashMap<String, String>();
-		questionsMap.put(ESM_Data._ID, ESM_Data._ID);
-		questionsMap.put(ESM_Data.TIMESTAMP, ESM_Data.TIMESTAMP);
-		questionsMap.put(ESM_Data.DEVICE_ID, ESM_Data.DEVICE_ID);
-		questionsMap.put(ESM_Data.TYPE, ESM_Data.TYPE);
-		questionsMap.put(ESM_Data.TITLE, ESM_Data.TITLE);
-		questionsMap.put(ESM_Data.SUBMIT, ESM_Data.SUBMIT);
-		questionsMap.put(ESM_Data.INSTRUCTIONS, ESM_Data.INSTRUCTIONS);
-		questionsMap.put(ESM_Data.RADIOS, ESM_Data.RADIOS);
-		questionsMap.put(ESM_Data.CHECKBOXES, ESM_Data.CHECKBOXES);
-		questionsMap.put(ESM_Data.LIKERT_MAX, ESM_Data.LIKERT_MAX);
-		questionsMap.put(ESM_Data.LIKERT_MAX_LABEL, ESM_Data.LIKERT_MAX_LABEL);
-		questionsMap.put(ESM_Data.LIKERT_MIN_LABEL, ESM_Data.LIKERT_MIN_LABEL);
-		questionsMap.put(ESM_Data.LIKERT_STEP, ESM_Data.LIKERT_STEP);
-		questionsMap.put(ESM_Data.QUICK_ANSWERS, ESM_Data.QUICK_ANSWERS);
-		questionsMap.put(ESM_Data.EXPIRATION_THREASHOLD,
-				ESM_Data.EXPIRATION_THREASHOLD);
-		questionsMap.put(ESM_Data.STATUS, ESM_Data.STATUS);
-		questionsMap.put(ESM_Data.ANSWER_TIMESTAMP, ESM_Data.ANSWER_TIMESTAMP);
-		questionsMap.put(ESM_Data.ANSWER, ESM_Data.ANSWER);
-		questionsMap.put(ESM_Data.TRIGGER, ESM_Data.TRIGGER);
+        questionsMap = new HashMap<String, String>();
+        questionsMap.put(ESM_Data._ID, ESM_Data._ID);
+        questionsMap.put(ESM_Data.TIMESTAMP, ESM_Data.TIMESTAMP);
+        questionsMap.put(ESM_Data.DEVICE_ID, ESM_Data.DEVICE_ID);
+        questionsMap.put(ESM_Data.TYPE, ESM_Data.TYPE);
+        questionsMap.put(ESM_Data.TITLE, ESM_Data.TITLE);
+        questionsMap.put(ESM_Data.SUBMIT, ESM_Data.SUBMIT);
+        questionsMap.put(ESM_Data.INSTRUCTIONS, ESM_Data.INSTRUCTIONS);
+        questionsMap.put(ESM_Data.RADIOS, ESM_Data.RADIOS);
+        questionsMap.put(ESM_Data.CHECKBOXES, ESM_Data.CHECKBOXES);
+        questionsMap.put(ESM_Data.LIKERT_MAX, ESM_Data.LIKERT_MAX);
+        questionsMap.put(ESM_Data.LIKERT_MAX_LABEL, ESM_Data.LIKERT_MAX_LABEL);
+        questionsMap.put(ESM_Data.LIKERT_MIN_LABEL, ESM_Data.LIKERT_MIN_LABEL);
+        questionsMap.put(ESM_Data.LIKERT_STEP, ESM_Data.LIKERT_STEP);
+        questionsMap.put(ESM_Data.QUICK_ANSWERS, ESM_Data.QUICK_ANSWERS);
+        questionsMap.put(ESM_Data.EXPIRATION_THREASHOLD,
+                ESM_Data.EXPIRATION_THREASHOLD);
+        questionsMap.put(ESM_Data.STATUS, ESM_Data.STATUS);
+        questionsMap.put(ESM_Data.ANSWER_TIMESTAMP, ESM_Data.ANSWER_TIMESTAMP);
+        questionsMap.put(ESM_Data.ANSWER, ESM_Data.ANSWER);
+        questionsMap.put(ESM_Data.TRIGGER, ESM_Data.TRIGGER);
+	    
+		return true;
 	}
 
 	/**
@@ -217,8 +227,11 @@ public class ESM_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -248,8 +261,12 @@ public class ESM_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+	    
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case ESMS_QUEUE:

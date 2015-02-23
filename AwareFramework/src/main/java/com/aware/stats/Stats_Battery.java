@@ -27,7 +27,8 @@ public class Stats_Battery {
 		String selection = Battery_Data.TIMESTAMP + " between " + timestamp_start + " AND " + timestamp_end;
         Cursor battery_raw = resolver.query(Battery_Data.CONTENT_URI, null, selection, null, Battery_Data.TIMESTAMP + " ASC");
 		if( battery_raw != null && battery_raw.moveToFirst() ) {
-			int last_battery_status = battery_raw.getInt(battery_raw.getColumnIndex(Battery_Data.STATUS));
+			
+		    int last_battery_status = battery_raw.getInt(battery_raw.getColumnIndex(Battery_Data.STATUS));
 			long last_battery_timestamp = battery_raw.getLong(battery_raw.getColumnIndex(Battery_Data.TIMESTAMP));
 			
 			while(battery_raw.moveToNext()) {
@@ -37,7 +38,6 @@ public class Stats_Battery {
 				if( battery_status == BatteryManager.BATTERY_STATUS_CHARGING && last_battery_status == BatteryManager.BATTERY_STATUS_CHARGING ) { //continuing charging 
 					total_time_charging += battery_timestamp-last_battery_timestamp;
 				}
-				
 				last_battery_status = battery_status;
 				last_battery_timestamp = battery_timestamp;
 			}

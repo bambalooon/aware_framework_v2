@@ -51,7 +51,7 @@ public class TimeZone extends Aware_Sensor {
 			String timeZone = java.util.TimeZone.getDefault().getID();
 			ContentValues rowData = new ContentValues();
             rowData.put(TimeZone_Data.TIMESTAMP, System.currentTimeMillis());
-            rowData.put(TimeZone_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+            rowData.put(TimeZone_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
             rowData.put(TimeZone_Data.TIMEZONE, timeZone);
             
             try{
@@ -67,7 +67,7 @@ public class TimeZone extends Aware_Sensor {
             Intent newTimeZone = new Intent(ACTION_AWARE_TIMEZONE);
             sendBroadcast(newTimeZone);
             
-            TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(), Aware_Preferences.FREQUENCY_TIMEZONE));
+            TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_TIMEZONE));
             mHandler.postDelayed(mRunnable, TIMEZONE_UPDATE * 1000);
 		}
 	};
@@ -102,9 +102,9 @@ public class TimeZone extends Aware_Sensor {
     public void onCreate() {
         super.onCreate();
         
-        TAG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(),Aware_Preferences.DEBUG_TAG):"AWARE::TimeZone";
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):"AWARE::TimeZone";
         
-        TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TIMEZONE));
+        TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TIMEZONE));
         
         DATABASE_TABLES = TimeZone_Provider.DATABASE_TABLES;
         TABLES_FIELDS = TimeZone_Provider.TABLES_FIELDS;
@@ -124,10 +124,10 @@ public class TimeZone extends Aware_Sensor {
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        TAG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_TAG):"AWARE::TimeZone";
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG):"AWARE::TimeZone";
         
-        if( Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TIMEZONE)) != TIMEZONE_UPDATE ) {
-            TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_TIMEZONE));
+        if( Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TIMEZONE)) != TIMEZONE_UPDATE ) {
+            TIMEZONE_UPDATE = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_TIMEZONE));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"TimeZone service active...");

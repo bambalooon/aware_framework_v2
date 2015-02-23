@@ -43,7 +43,7 @@ public class Mqtt_Provider extends ContentProvider {
 	/**
 	 * Authority of MQTT content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.mqtt";
+	public static String AUTHORITY = "com.aware.provider.mqtt";
 
 	// ContentProvider query paths
 	private static final int MQTT = 1;
@@ -111,14 +111,26 @@ public class Mqtt_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -161,8 +173,10 @@ public class Mqtt_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -199,39 +213,35 @@ public class Mqtt_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.mqtt";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[0], MQTT);
+        sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
+                MQTT_ID);
+        sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[1],
+                MQTT_SUBSCRIPTION);
+        sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#",
+                MQTT_SUBSCRIPTION_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[0], MQTT);
-		sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
-				MQTT_ID);
-		sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[1],
-				MQTT_SUBSCRIPTION);
-		sUriMatcher.addURI(Mqtt_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#",
-				MQTT_SUBSCRIPTION_ID);
+        messagesMap = new HashMap<String, String>();
+        messagesMap.put(Mqtt_Messages.MQTT_ID, Mqtt_Messages.MQTT_ID);
+        messagesMap.put(Mqtt_Messages.TIMESTAMP, Mqtt_Messages.TIMESTAMP);
+        messagesMap.put(Mqtt_Messages.DEVICE_ID, Mqtt_Messages.DEVICE_ID);
+        messagesMap.put(Mqtt_Messages.MESSAGE, Mqtt_Messages.MESSAGE);
+        messagesMap.put(Mqtt_Messages.TOPIC, Mqtt_Messages.TOPIC);
+        messagesMap.put(Mqtt_Messages.STATUS, Mqtt_Messages.STATUS);
 
-		messagesMap = new HashMap<String, String>();
-		messagesMap.put(Mqtt_Messages.MQTT_ID, Mqtt_Messages.MQTT_ID);
-		messagesMap.put(Mqtt_Messages.TIMESTAMP, Mqtt_Messages.TIMESTAMP);
-		messagesMap.put(Mqtt_Messages.DEVICE_ID, Mqtt_Messages.DEVICE_ID);
-		messagesMap.put(Mqtt_Messages.MESSAGE, Mqtt_Messages.MESSAGE);
-		messagesMap.put(Mqtt_Messages.TOPIC, Mqtt_Messages.TOPIC);
-		messagesMap.put(Mqtt_Messages.STATUS, Mqtt_Messages.STATUS);
-
-		subscriptionMap = new HashMap<String, String>();
-		subscriptionMap.put(Mqtt_Subscriptions.MQTT_SUBSCRIPTION_ID,
-				Mqtt_Subscriptions.MQTT_SUBSCRIPTION_ID);
-		subscriptionMap.put(Mqtt_Subscriptions.TIMESTAMP,
-				Mqtt_Subscriptions.TIMESTAMP);
-		subscriptionMap.put(Mqtt_Subscriptions.DEVICE_ID,
-				Mqtt_Subscriptions.DEVICE_ID);
-		subscriptionMap.put(Mqtt_Subscriptions.TOPIC, Mqtt_Subscriptions.TOPIC);
+        subscriptionMap = new HashMap<String, String>();
+        subscriptionMap.put(Mqtt_Subscriptions.MQTT_SUBSCRIPTION_ID,
+                Mqtt_Subscriptions.MQTT_SUBSCRIPTION_ID);
+        subscriptionMap.put(Mqtt_Subscriptions.TIMESTAMP,
+                Mqtt_Subscriptions.TIMESTAMP);
+        subscriptionMap.put(Mqtt_Subscriptions.DEVICE_ID,
+                Mqtt_Subscriptions.DEVICE_ID);
+        subscriptionMap.put(Mqtt_Subscriptions.TOPIC, Mqtt_Subscriptions.TOPIC);
+	    
+		return true;
 	}
 
 	/**
@@ -241,8 +251,10 @@ public class Mqtt_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -278,8 +290,11 @@ public class Mqtt_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+	    
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case MQTT:

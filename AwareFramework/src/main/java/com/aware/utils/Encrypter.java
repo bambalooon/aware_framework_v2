@@ -59,7 +59,7 @@ public class Encrypter {
      * @throws NoSuchAlgorithmException
      */
     public static String hashSHA1( String clear ) {
-    	String hexStr = "";
+    	if (clear == null ) return "";
     	try {
 			MessageDigest md = MessageDigest.getInstance("SHA1");
 			md.reset();
@@ -67,14 +67,15 @@ public class Encrypter {
 	    	md.update(buffer);
 	    	byte[] digest = md.digest();
 	    	
+	    	String hexStr = "";
 	    	for(int i=0; i < digest.length; i++) {
 	    		hexStr+=Integer.toString(( digest[i] & 0xff ) + 0x100, 16).substring(1);
 	    	}
+	    	return hexStr;
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
-			hexStr = "";
 		}
-    	return hexStr;
+    	return "";
     }
     
     /**
@@ -83,7 +84,8 @@ public class Encrypter {
      * @return
      * @throws NoSuchAlgorithmException
      */
-    public static final String hashMD5(final String clear) {
+    public static final String hashMD5(String clear) {
+    	if( clear == null ) return "";
         try {
             // Create MD5 Hash
             MessageDigest digest = java.security.MessageDigest.getInstance("MD5");

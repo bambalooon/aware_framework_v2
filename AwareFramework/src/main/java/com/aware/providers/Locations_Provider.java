@@ -43,7 +43,7 @@ public class Locations_Provider extends ContentProvider {
 	/**
 	 * Authority of Locations content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.locations";
+	public static String AUTHORITY = "com.aware.provider.locations";
 
 	// ContentProvider query paths
 	private static final int LOCATIONS = 1;
@@ -100,14 +100,27 @@ public class Locations_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+	    
 		int count = 0;
 
 		switch (sUriMatcher.match(uri)) {
@@ -142,8 +155,10 @@ public class Locations_Provider extends ContentProvider {
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -169,38 +184,34 @@ public class Locations_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.locations";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Locations_Provider.AUTHORITY, DATABASE_TABLES[0],
+                LOCATIONS);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Locations_Provider.AUTHORITY, DATABASE_TABLES[0],
-				LOCATIONS);
-
-		locationsProjectionMap = new HashMap<String, String>();
-		locationsProjectionMap.put(Locations_Data._ID, Locations_Data._ID);
-		locationsProjectionMap.put(Locations_Data.TIMESTAMP,
-				Locations_Data.TIMESTAMP);
-		locationsProjectionMap.put(Locations_Data.DEVICE_ID,
-				Locations_Data.DEVICE_ID);
-		locationsProjectionMap.put(Locations_Data.LATITUDE,
-				Locations_Data.LATITUDE);
-		locationsProjectionMap.put(Locations_Data.LONGITUDE,
-				Locations_Data.LONGITUDE);
-		locationsProjectionMap.put(Locations_Data.BEARING,
-				Locations_Data.BEARING);
-		locationsProjectionMap.put(Locations_Data.SPEED, Locations_Data.SPEED);
-		locationsProjectionMap.put(Locations_Data.ALTITUDE,
-				Locations_Data.ALTITUDE);
-		locationsProjectionMap.put(Locations_Data.PROVIDER,
-				Locations_Data.PROVIDER);
-		locationsProjectionMap.put(Locations_Data.ACCURACY,
-				Locations_Data.ACCURACY);
-		locationsProjectionMap.put(Locations_Data.LABEL, Locations_Data.LABEL);
+        locationsProjectionMap = new HashMap<String, String>();
+        locationsProjectionMap.put(Locations_Data._ID, Locations_Data._ID);
+        locationsProjectionMap.put(Locations_Data.TIMESTAMP,
+                Locations_Data.TIMESTAMP);
+        locationsProjectionMap.put(Locations_Data.DEVICE_ID,
+                Locations_Data.DEVICE_ID);
+        locationsProjectionMap.put(Locations_Data.LATITUDE,
+                Locations_Data.LATITUDE);
+        locationsProjectionMap.put(Locations_Data.LONGITUDE,
+                Locations_Data.LONGITUDE);
+        locationsProjectionMap.put(Locations_Data.BEARING,
+                Locations_Data.BEARING);
+        locationsProjectionMap.put(Locations_Data.SPEED, Locations_Data.SPEED);
+        locationsProjectionMap.put(Locations_Data.ALTITUDE,
+                Locations_Data.ALTITUDE);
+        locationsProjectionMap.put(Locations_Data.PROVIDER,
+                Locations_Data.PROVIDER);
+        locationsProjectionMap.put(Locations_Data.ACCURACY,
+                Locations_Data.ACCURACY);
+        locationsProjectionMap.put(Locations_Data.LABEL, Locations_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -210,8 +221,10 @@ public class Locations_Provider extends ContentProvider {
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 
@@ -244,8 +257,10 @@ public class Locations_Provider extends ContentProvider {
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
 
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {

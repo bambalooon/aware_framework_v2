@@ -37,12 +37,13 @@ import com.aware.utils.DatabaseHelper;
  */
 public class Aware_Provider extends ContentProvider {
 
-	public static final int DATABASE_VERSION = 4;
+	public static final int DATABASE_VERSION = 7;
 
 	/**
 	 * AWARE framework content authority
+	 * com.aware.provider.aware
 	 */
-	public static final String AUTHORITY = "com.aware.provider.aware";
+	public static String AUTHORITY = "com.aware.provider.aware";
 
 	private static final int DEVICE_INFO = 1;
 	private static final int DEVICE_INFO_ID = 2;
@@ -61,8 +62,7 @@ public class Aware_Provider extends ContentProvider {
 		private Aware_Device() {
 		};
 
-		public static final Uri CONTENT_URI = Uri.parse("content://"
-				+ Aware_Provider.AUTHORITY + "/aware_device");
+		public static final Uri CONTENT_URI = Uri.parse("content://" + Aware_Provider.AUTHORITY + "/aware_device");
 		public static final String CONTENT_TYPE = "vnd.android.cursor.dir/vnd.aware.device";
 		public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.aware.device";
 
@@ -81,6 +81,7 @@ public class Aware_Provider extends ContentProvider {
 		public static final String RELEASE = "release";
 		public static final String RELEASE_TYPE = "release_type";
 		public static final String SDK = "sdk";
+		public static final String LABEL = "label";
 	}
 
 	/**
@@ -101,6 +102,7 @@ public class Aware_Provider extends ContentProvider {
 		public static final String SETTING_ID = "_id";
 		public static final String SETTING_KEY = "key";
 		public static final String SETTING_VALUE = "value";
+		public static final String SETTING_PACKAGE_NAME = "package_name";
 	}
 
 	/**
@@ -110,8 +112,7 @@ public class Aware_Provider extends ContentProvider {
 	 * 
 	 */
 	public static final class Aware_Plugins implements BaseColumns {
-		private Aware_Plugins() {
-		};
+		private Aware_Plugins() {};
 
 		public static final Uri CONTENT_URI = Uri.parse("content://"
 				+ Aware_Provider.AUTHORITY + "/aware_plugins");
@@ -123,6 +124,9 @@ public class Aware_Provider extends ContentProvider {
 		public static final String PLUGIN_NAME = "plugin_name";
 		public static final String PLUGIN_VERSION = "plugin_version";
 		public static final String PLUGIN_STATUS = "plugin_status";
+		public static final String PLUGIN_AUTHOR = "plugin_author";
+		public static final String PLUGIN_ICON = "plugin_icon";
+		public static final String PLUGIN_DESCRIPTION = "plugin_description";
 	}
 
 	public static String DATABASE_NAME = Environment
@@ -132,34 +136,39 @@ public class Aware_Provider extends ContentProvider {
 	public static final String[] TABLES_FIELDS = {
 			// Device information
 			Aware_Device._ID + " integer primary key autoincrement,"
-					+ Aware_Device.TIMESTAMP + " real default 0,"
-					+ Aware_Device.DEVICE_ID + " text default '',"
-					+ Aware_Device.BOARD + " text default '',"
-					+ Aware_Device.BRAND + " text default '',"
-					+ Aware_Device.DEVICE + " text default '',"
-					+ Aware_Device.BUILD_ID + " text default '',"
-					+ Aware_Device.HARDWARE + " text default '',"
-					+ Aware_Device.MANUFACTURER + " text default '',"
-					+ Aware_Device.MODEL + " text default '',"
-					+ Aware_Device.PRODUCT + " text default '',"
-					+ Aware_Device.SERIAL + " text default '',"
-					+ Aware_Device.RELEASE + " text default '',"
-					+ Aware_Device.RELEASE_TYPE + " text default '',"
-					+ Aware_Device.SDK + " integer default 0," + "UNIQUE ("
-					+ Aware_Device.TIMESTAMP + "," + Aware_Device.DEVICE_ID
-					+ ")",
+			+ Aware_Device.TIMESTAMP + " real default 0,"
+			+ Aware_Device.DEVICE_ID + " text default '',"
+			+ Aware_Device.BOARD + " text default '',"
+			+ Aware_Device.BRAND + " text default '',"
+			+ Aware_Device.DEVICE + " text default '',"
+			+ Aware_Device.BUILD_ID + " text default '',"
+			+ Aware_Device.HARDWARE + " text default '',"
+			+ Aware_Device.MANUFACTURER + " text default '',"
+			+ Aware_Device.MODEL + " text default '',"
+			+ Aware_Device.PRODUCT + " text default '',"
+			+ Aware_Device.SERIAL + " text default '',"
+			+ Aware_Device.RELEASE + " text default '',"
+			+ Aware_Device.RELEASE_TYPE + " text default '',"
+			+ Aware_Device.SDK + " integer default 0,"
+			+ Aware_Device.LABEL + " text default '',"
+			+ "UNIQUE (" + Aware_Device.TIMESTAMP + "," + Aware_Device.DEVICE_ID + ")",
 
 			// Settings
 			Aware_Settings.SETTING_ID + " integer primary key autoincrement,"
-					+ Aware_Settings.SETTING_KEY + " text default '',"
-					+ Aware_Settings.SETTING_VALUE + " text default ''",
+			+ Aware_Settings.SETTING_KEY + " text default '',"
+			+ Aware_Settings.SETTING_VALUE + " text default '',"
+			+ Aware_Settings.SETTING_PACKAGE_NAME + " text default ''",
 
 			// Plugins
 			Aware_Plugins.PLUGIN_ID + " integer primary key autoincrement,"
-					+ Aware_Plugins.PLUGIN_PACKAGE_NAME + " text default '',"
-					+ Aware_Plugins.PLUGIN_NAME + " text default '',"
-					+ Aware_Plugins.PLUGIN_VERSION + " integer default 0,"
-					+ Aware_Plugins.PLUGIN_STATUS + " integer default 0" };
+			+ Aware_Plugins.PLUGIN_PACKAGE_NAME + " text default '',"
+			+ Aware_Plugins.PLUGIN_NAME + " text default '',"
+			+ Aware_Plugins.PLUGIN_VERSION + " integer default 0,"
+			+ Aware_Plugins.PLUGIN_STATUS + " integer default 0,"
+			+ Aware_Plugins.PLUGIN_AUTHOR + " text default '',"
+			+ Aware_Plugins.PLUGIN_ICON + " blob default null,"
+			+ Aware_Plugins.PLUGIN_DESCRIPTION + " text default ''"
+			};
 
 	private static UriMatcher sUriMatcher = null;
 	private static HashMap<String, String> deviceMap = null;
@@ -169,13 +178,26 @@ public class Aware_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+		
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -223,8 +245,11 @@ public class Aware_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -267,62 +292,54 @@ public class Aware_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
+	    AUTHORITY = getContext().getPackageName() + ".provider.aware";
+	    
+        sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[0], DEVICE_INFO);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#", DEVICE_INFO_ID);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[1], SETTING);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#", SETTING_ID);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[2], PLUGIN);
+        sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[2] + "/#", PLUGIN_ID);
+
+        deviceMap = new HashMap<String, String>();
+        deviceMap.put(Aware_Device._ID, Aware_Device._ID);
+        deviceMap.put(Aware_Device.TIMESTAMP, Aware_Device.TIMESTAMP);
+        deviceMap.put(Aware_Device.DEVICE_ID, Aware_Device.DEVICE_ID);
+        deviceMap.put(Aware_Device.BOARD, Aware_Device.BOARD);
+        deviceMap.put(Aware_Device.BRAND, Aware_Device.BRAND);
+        deviceMap.put(Aware_Device.DEVICE, Aware_Device.DEVICE);
+        deviceMap.put(Aware_Device.BUILD_ID, Aware_Device.BUILD_ID);
+        deviceMap.put(Aware_Device.HARDWARE, Aware_Device.HARDWARE);
+        deviceMap.put(Aware_Device.MANUFACTURER, Aware_Device.MANUFACTURER);
+        deviceMap.put(Aware_Device.MODEL, Aware_Device.MODEL);
+        deviceMap.put(Aware_Device.PRODUCT, Aware_Device.PRODUCT);
+        deviceMap.put(Aware_Device.SERIAL, Aware_Device.SERIAL);
+        deviceMap.put(Aware_Device.RELEASE, Aware_Device.RELEASE);
+        deviceMap.put(Aware_Device.RELEASE_TYPE, Aware_Device.RELEASE_TYPE);
+        deviceMap.put(Aware_Device.SDK, Aware_Device.SDK);
+        deviceMap.put(Aware_Device.LABEL, Aware_Device.LABEL);
+
+        settingsMap = new HashMap<String, String>();
+        settingsMap.put(Aware_Settings.SETTING_ID, Aware_Settings.SETTING_ID);
+        settingsMap.put(Aware_Settings.SETTING_KEY, Aware_Settings.SETTING_KEY);
+        settingsMap.put(Aware_Settings.SETTING_VALUE,Aware_Settings.SETTING_VALUE);
+        settingsMap.put(Aware_Settings.SETTING_PACKAGE_NAME, Aware_Settings.SETTING_PACKAGE_NAME);
+
+        pluginsMap = new HashMap<String, String>();
+        pluginsMap.put(Aware_Plugins.PLUGIN_ID, Aware_Plugins.PLUGIN_ID);
+        pluginsMap.put(Aware_Plugins.PLUGIN_PACKAGE_NAME,Aware_Plugins.PLUGIN_PACKAGE_NAME);
+        pluginsMap.put(Aware_Plugins.PLUGIN_NAME, Aware_Plugins.PLUGIN_NAME);
+        pluginsMap.put(Aware_Plugins.PLUGIN_VERSION,Aware_Plugins.PLUGIN_VERSION);
+        pluginsMap.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugins.PLUGIN_STATUS);
+        pluginsMap.put(Aware_Plugins.PLUGIN_AUTHOR, Aware_Plugins.PLUGIN_AUTHOR);
+        pluginsMap.put(Aware_Plugins.PLUGIN_ICON, Aware_Plugins.PLUGIN_ICON);
+        pluginsMap.put(Aware_Plugins.PLUGIN_DESCRIPTION, Aware_Plugins.PLUGIN_DESCRIPTION);
+        
+        return true;
 	}
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[0],
-				DEVICE_INFO);
-		sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
-				DEVICE_INFO_ID);
-		sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SETTING);
-		sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#",
-				SETTING_ID);
-		sUriMatcher
-				.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[2], PLUGIN);
-		sUriMatcher.addURI(Aware_Provider.AUTHORITY, DATABASE_TABLES[2] + "/#",
-				PLUGIN_ID);
-
-		deviceMap = new HashMap<String, String>();
-		deviceMap.put(Aware_Device._ID, Aware_Device._ID);
-		deviceMap.put(Aware_Device.TIMESTAMP, Aware_Device.TIMESTAMP);
-		deviceMap.put(Aware_Device.DEVICE_ID, Aware_Device.DEVICE_ID);
-		deviceMap.put(Aware_Device.BOARD, Aware_Device.BOARD);
-		deviceMap.put(Aware_Device.BRAND, Aware_Device.BRAND);
-		deviceMap.put(Aware_Device.DEVICE, Aware_Device.DEVICE);
-		deviceMap.put(Aware_Device.BUILD_ID, Aware_Device.BUILD_ID);
-		deviceMap.put(Aware_Device.HARDWARE, Aware_Device.HARDWARE);
-		deviceMap.put(Aware_Device.MANUFACTURER, Aware_Device.MANUFACTURER);
-		deviceMap.put(Aware_Device.MODEL, Aware_Device.MODEL);
-		deviceMap.put(Aware_Device.PRODUCT, Aware_Device.PRODUCT);
-		deviceMap.put(Aware_Device.SERIAL, Aware_Device.SERIAL);
-		deviceMap.put(Aware_Device.RELEASE, Aware_Device.RELEASE);
-		deviceMap.put(Aware_Device.RELEASE_TYPE, Aware_Device.RELEASE_TYPE);
-		deviceMap.put(Aware_Device.SDK, Aware_Device.SDK);
-
-		settingsMap = new HashMap<String, String>();
-		settingsMap.put(Aware_Settings.SETTING_ID, Aware_Settings.SETTING_ID);
-		settingsMap.put(Aware_Settings.SETTING_KEY, Aware_Settings.SETTING_KEY);
-		settingsMap.put(Aware_Settings.SETTING_VALUE,
-				Aware_Settings.SETTING_VALUE);
-
-		pluginsMap = new HashMap<String, String>();
-		pluginsMap.put(Aware_Plugins.PLUGIN_ID, Aware_Plugins.PLUGIN_ID);
-		pluginsMap.put(Aware_Plugins.PLUGIN_PACKAGE_NAME,
-				Aware_Plugins.PLUGIN_PACKAGE_NAME);
-		pluginsMap.put(Aware_Plugins.PLUGIN_NAME, Aware_Plugins.PLUGIN_NAME);
-		pluginsMap.put(Aware_Plugins.PLUGIN_VERSION,
-				Aware_Plugins.PLUGIN_VERSION);
-		pluginsMap
-				.put(Aware_Plugins.PLUGIN_STATUS, Aware_Plugins.PLUGIN_STATUS);
-
-	}
+	
 
 	/**
 	 * Query entries from the database
@@ -330,8 +347,11 @@ public class Aware_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+		
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -368,8 +388,12 @@ public class Aware_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+		
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+	    
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case DEVICE_INFO:

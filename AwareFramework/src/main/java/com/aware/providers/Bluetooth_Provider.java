@@ -41,9 +41,10 @@ public class Bluetooth_Provider extends ContentProvider {
 	private static final int DATABASE_VERSION = 2;
 
 	/**
-	 * Authoroty of Bluetooth content provider
+	 * Authority of Bluetooth content provider
+	 * com.aware.provider.bluetooth
 	 */
-	public static final String AUTHORITY = "com.aware.provider.bluetooth";
+	public static String AUTHORITY = "com.aware.provider.bluetooth";
 
 	// ContentProvider query paths
 	private static final int BT_DEV = 1;
@@ -83,8 +84,7 @@ public class Bluetooth_Provider extends ContentProvider {
 		private Bluetooth_Data() {
 		};
 
-		public static final Uri CONTENT_URI = Uri.parse("content://"
-				+ Bluetooth_Provider.AUTHORITY + "/bluetooth");
+		public static final Uri CONTENT_URI = Uri.parse( "content://" + Bluetooth_Provider.AUTHORITY + "/bluetooth" );
 		public static final String CONTENT_TYPE = "vnd.android.cursor.dir/vnd.aware.bluetooth.data";
 		public static final String CONTENT_ITEM_TYPE = "vnd.android.cursor.item/vnd.aware.bluetooth.data";
 
@@ -128,13 +128,25 @@ public class Bluetooth_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete bluetooth entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -176,8 +188,10 @@ public class Bluetooth_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -215,46 +229,42 @@ public class Bluetooth_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.bluetooth";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[0],
+                BT_DEV);
+        sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[0]
+                + "/#", BT_DEV_ID);
+        sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[1],
+                BT_DATA);
+        sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[1]
+                + "/#", BT_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[0],
-				BT_DEV);
-		sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[0]
-				+ "/#", BT_DEV_ID);
-		sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[1],
-				BT_DATA);
-		sUriMatcher.addURI(Bluetooth_Provider.AUTHORITY, DATABASE_TABLES[1]
-				+ "/#", BT_DATA_ID);
+        bluetoothDeviceMap = new HashMap<String, String>();
+        bluetoothDeviceMap.put(Bluetooth_Sensor._ID, Bluetooth_Sensor._ID);
+        bluetoothDeviceMap.put(Bluetooth_Sensor.TIMESTAMP,
+                Bluetooth_Sensor.TIMESTAMP);
+        bluetoothDeviceMap.put(Bluetooth_Sensor.DEVICE_ID,
+                Bluetooth_Sensor.DEVICE_ID);
+        bluetoothDeviceMap.put(Bluetooth_Sensor.BT_ADDRESS,
+                Bluetooth_Sensor.BT_ADDRESS);
+        bluetoothDeviceMap.put(Bluetooth_Sensor.BT_NAME,
+                Bluetooth_Sensor.BT_NAME);
 
-		bluetoothDeviceMap = new HashMap<String, String>();
-		bluetoothDeviceMap.put(Bluetooth_Sensor._ID, Bluetooth_Sensor._ID);
-		bluetoothDeviceMap.put(Bluetooth_Sensor.TIMESTAMP,
-				Bluetooth_Sensor.TIMESTAMP);
-		bluetoothDeviceMap.put(Bluetooth_Sensor.DEVICE_ID,
-				Bluetooth_Sensor.DEVICE_ID);
-		bluetoothDeviceMap.put(Bluetooth_Sensor.BT_ADDRESS,
-				Bluetooth_Sensor.BT_ADDRESS);
-		bluetoothDeviceMap.put(Bluetooth_Sensor.BT_NAME,
-				Bluetooth_Sensor.BT_NAME);
-
-		bluetoothDataMap = new HashMap<String, String>();
-		bluetoothDataMap.put(Bluetooth_Data._ID, Bluetooth_Data._ID);
-		bluetoothDataMap
-				.put(Bluetooth_Data.TIMESTAMP, Bluetooth_Data.TIMESTAMP);
-		bluetoothDataMap
-				.put(Bluetooth_Data.DEVICE_ID, Bluetooth_Data.DEVICE_ID);
-		bluetoothDataMap.put(Bluetooth_Data.BT_ADDRESS,
-				Bluetooth_Data.BT_ADDRESS);
-		bluetoothDataMap.put(Bluetooth_Data.BT_NAME, Bluetooth_Data.BT_NAME);
-		bluetoothDataMap.put(Bluetooth_Data.BT_RSSI, Bluetooth_Data.BT_RSSI);
-		bluetoothDataMap.put(Bluetooth_Data.BT_LABEL, Bluetooth_Data.BT_LABEL);
+        bluetoothDataMap = new HashMap<String, String>();
+        bluetoothDataMap.put(Bluetooth_Data._ID, Bluetooth_Data._ID);
+        bluetoothDataMap
+                .put(Bluetooth_Data.TIMESTAMP, Bluetooth_Data.TIMESTAMP);
+        bluetoothDataMap
+                .put(Bluetooth_Data.DEVICE_ID, Bluetooth_Data.DEVICE_ID);
+        bluetoothDataMap.put(Bluetooth_Data.BT_ADDRESS,
+                Bluetooth_Data.BT_ADDRESS);
+        bluetoothDataMap.put(Bluetooth_Data.BT_NAME, Bluetooth_Data.BT_NAME);
+        bluetoothDataMap.put(Bluetooth_Data.BT_RSSI, Bluetooth_Data.BT_RSSI);
+        bluetoothDataMap.put(Bluetooth_Data.BT_LABEL, Bluetooth_Data.BT_LABEL);
+	    
+	    return true;
 	}
 
 	/**
@@ -263,8 +273,11 @@ public class Bluetooth_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+		
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 
@@ -300,8 +313,11 @@ public class Bluetooth_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+		
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {

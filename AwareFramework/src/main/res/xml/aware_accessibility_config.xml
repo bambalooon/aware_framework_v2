@@ -3,9 +3,9 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/aware_description"
     android:settingsActivity="com.aware.Aware_Preferences"
-    android:accessibilityEventTypes="typeAllMask"
-    android:accessibilityFeedbackType="feedbackAllMask"
-    android:accessibilityFlags="flagIncludeNotImportantViews"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeNotificationStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault"
     android:notificationTimeout="50"
-    android:canRetrieveWindowContent="true"
+    android:canRetrieveWindowContent="false"
 />

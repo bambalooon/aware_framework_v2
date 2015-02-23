@@ -63,6 +63,8 @@ public class Light extends Aware_Sensor implements SensorEventListener {
      * ContentProvider: LightProvider
      */
     public static final String ACTION_AWARE_LIGHT = "ACTION_AWARE_LIGHT";
+    public static final String EXTRA_DATA = "data";
+    public static final String EXTRA_SENSOR = "sensor";
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -72,16 +74,19 @@ public class Light extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Light_Data.DEVICE_ID, Aware.getSetting(getContentResolver(),Aware_Preferences.DEVICE_ID));
+        rowData.put(Light_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
         rowData.put(Light_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Light_Data.LIGHT_LUX, event.values[0]);
         rowData.put(Light_Data.ACCURACY, event.accuracy);
         
         try {
-            getContentResolver().insert(Light_Data.CONTENT_URI, rowData);
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+        		getContentResolver().insert(Light_Data.CONTENT_URI, rowData);
+        	}
             
-            Intent accelData = new Intent(ACTION_AWARE_LIGHT);
-            sendBroadcast(accelData);
+            Intent lightData = new Intent(ACTION_AWARE_LIGHT);
+            lightData.putExtra(EXTRA_DATA, rowData);
+            sendBroadcast(lightData);
             
             if( Aware.DEBUG ) Log.d(TAG, "Light:"+ rowData.toString());
         }catch( SQLiteException e ) {
@@ -95,7 +100,7 @@ public class Light extends Aware_Sensor implements SensorEventListener {
         Cursor sensorInfo = getContentResolver().query(Light_Sensor.CONTENT_URI, null, null, null, null);
         if( sensorInfo == null || ! sensorInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Light_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Light_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Light_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Light_Sensor.MAXIMUM_RANGE, sensor.getMaximumRange());
             rowData.put(Light_Sensor.MINIMUM_DELAY, sensor.getMinDelay());
@@ -107,7 +112,14 @@ public class Light extends Aware_Sensor implements SensorEventListener {
             rowData.put(Light_Sensor.VERSION, sensor.getVersion());
             
             try {
-                getContentResolver().insert(Light_Sensor.CONTENT_URI, rowData);
+            	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+            		getContentResolver().insert(Light_Sensor.CONTENT_URI, rowData);
+            	}
+            	
+            	Intent light_dev = new Intent(ACTION_AWARE_LIGHT);
+            	light_dev.putExtra(EXTRA_SENSOR, rowData);
+            	sendBroadcast(light_dev);
+            	
                 if( Aware.DEBUG ) Log.d(TAG, "Light sensor info: "+ rowData.toString());
             }catch( SQLiteException e ) {
                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
@@ -131,12 +143,12 @@ public class Light extends Aware_Sensor implements SensorEventListener {
             stopSelf();
         }
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_LIGHT));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_LIGHT, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_LIGHT));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LIGHT, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT));
         }
         
         sensorThread = new HandlerThread(TAG);
@@ -173,18 +185,17 @@ public class Light extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_LIGHT));
+        	if(SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT))) {
+                sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mLight);
+                mSensorManager.registerListener(this, mLight, Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT)), sensorHandler);
+            }
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT));
         } catch( NumberFormatException e ) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_LIGHT, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_LIGHT));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mLight);
-            mSensorManager.registerListener(this, mLight, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_LIGHT, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_LIGHT));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Light service active...");

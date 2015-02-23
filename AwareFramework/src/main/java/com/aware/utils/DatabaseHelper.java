@@ -86,27 +86,30 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     	
     	//Get reference to database file, we might not have it.
     	File database_file = new File(database_name);
-    	SQLiteDatabase current_database = SQLiteDatabase.openDatabase(database_file.getPath(), null, SQLiteDatabase.CREATE_IF_NECESSARY);
-    	
-    	int current_version = current_database.getVersion();
-    	
-    	if( current_version != new_version ) {
-    		current_database.beginTransaction();
-    		try {
-	    		if( current_version == 0 ) {
-	    			onCreate(current_database);
-	    		} else {
-	    			onUpgrade(current_database, current_version, new_version);
-	    		}
-	    		current_database.setVersion(new_version);
-	    		current_database.setTransactionSuccessful();
-    		}finally {
-    			current_database.endTransaction();
-    		}
+    	try {
+    	    SQLiteDatabase current_database = SQLiteDatabase.openDatabase(database_file.getPath(), null, SQLiteDatabase.CREATE_IF_NECESSARY);
+    	    int current_version = current_database.getVersion();
+            
+            if( current_version != new_version ) {
+                current_database.beginTransaction();
+                try {
+                    if( current_version == 0 ) {
+                        onCreate(current_database);
+                    } else {
+                        onUpgrade(current_database, current_version, new_version);
+                    }
+                    current_database.setVersion(new_version);
+                    current_database.setTransactionSuccessful();
+                }finally {
+                    current_database.endTransaction();
+                }
+            }
+            onOpen(current_database);
+            database = current_database;
+            return database;
+    	} catch (SQLException e ) {
+    	    return null;
     	}
-    	onOpen(current_database);
-    	database = current_database;
-    	return database;
     }
     
     @Override

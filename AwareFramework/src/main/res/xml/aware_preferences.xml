@@ -3,28 +3,34 @@
 
     <PreferenceCategory
         android:key="debug_flags"
-        android:title="Development Information" >
+        android:title="@string/aware_developer" >
         <CheckBoxPreference
             android:defaultValue="false"
             android:key="debug_flag"
             android:persistent="true"
-            android:summary="Output ADB logcat debug messages for add-ons and AWARE"
-            android:title="Debug messages" />
+            android:summary="@string/aware_debug_summary"
+            android:title="@string/aware_debug_title" />
 
         <EditTextPreference
             android:defaultValue="AWARE"
             android:dependency="debug_flag"
             android:key="debug_tag"
             android:persistent="true"
-            android:summary="Overrides the ADB logcat tag"
-            android:title="Debug tag (by default is AWARE)" />
+            android:summary="@string/aware_debug_tag_summary"
+            android:title="@string/aware_debug_tag" />
 
         <CheckBoxPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="aware_auto_update"
             android:persistent="true"
-            android:summary="Current version is ???"
-            android:title="Check for updates" />
+            android:summary="@string/aware_auto_update_version"
+            android:title="@string/aware_auto_update" />
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="debug_db_slow"
+            android:persistent="true"
+            android:summary="No database storage with high-performance sensors (e.g., accelerometer, gyroscope, etc.)"
+            android:title="Lightweight I/O" />
     </PreferenceCategory>
     <PreferenceCategory
         android:key="device_ids"
@@ -32,8 +38,9 @@
         <EditTextPreference
             android:key="device_id"
             android:persistent="true"
+            android:selectable="false"
             android:summary="UUID:"
-            android:title="AWARE Device ID" />
+            android:title="@string/aware_device_id" />
     </PreferenceCategory>
     <PreferenceCategory
         android:key="sensors"
@@ -52,6 +59,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_accelerometer"
+                android:inputType="number"
                 android:key="frequency_accelerometer"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -67,6 +75,16 @@
                 android:persistent="true"
                 android:summary="Current visible and background applications"
                 android:title="Application usage" />
+
+            <EditTextPreference
+                android:defaultValue="30"
+                android:dependency="status_applications"
+                android:inputType="number"
+                android:key="frequency_applications"
+                android:persistent="true"
+                android:summary="30 seconds"
+                android:title="Update frequency of background applications" />
+
             <CheckBoxPreference
                 android:defaultValue="false"
                 android:key="status_installations"
@@ -101,6 +119,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_barometer"
+                android:inputType="number"
                 android:key="frequency_barometer"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -129,9 +148,10 @@
             <EditTextPreference
                 android:defaultValue="60"
                 android:dependency="status_bluetooth"
+                android:inputType="number"
                 android:key="frequency_bluetooth"
                 android:persistent="true"
-                android:summary="Interval in seconds (default = 60)"
+                android:summary="60 seconds"
                 android:title="Scanning update frequency" />
         </PreferenceScreen>
         <PreferenceScreen
@@ -140,7 +160,7 @@
             android:title="Communication" >
             <CheckBoxPreference
                 android:defaultValue="false"
-                android:key="status_communication"
+                android:key="status_communication_events"
                 android:persistent="true"
                 android:summary="User in call, not in call"
                 android:title="User availability" />
@@ -181,6 +201,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_gravity"
+                android:inputType="number"
                 android:key="frequency_gravity"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -199,6 +220,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_gyroscope"
+                android:inputType="number"
                 android:key="frequency_gyroscope"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -218,15 +240,17 @@
             <EditTextPreference
                 android:defaultValue="180"
                 android:dependency="status_location_gps"
-                android:key="frequency_gps"
+                android:key="frequency_location_gps"
                 android:persistent="true"
+                android:inputType="number"
                 android:summary="X in seconds (default = 180). 0 is always on."
                 android:title="GPS update frequency" />
             <EditTextPreference
                 android:defaultValue="150"
                 android:dependency="status_location_gps"
-                android:key="min_gps_accuracy"
+                android:key="min_location_gps_accuracy"
                 android:persistent="true"
+                android:inputType="number"
                 android:summary="Desired GPS accuracy in meters (default = 150). 0 keeps GPS always on."
                 android:title="GPS accuracy" />
 
@@ -240,23 +264,27 @@
             <EditTextPreference
                 android:defaultValue="300"
                 android:dependency="status_location_network"
-                android:key="frequency_network"
+                android:key="frequency_location_network"
                 android:persistent="true"
+                android:inputType="number"
                 android:summary="X in seconds (default = 300). 0 will keep network triangulation always on."
                 android:title="Network update frequency" />
             <EditTextPreference
                 android:defaultValue="1500"
                 android:dependency="status_location_network"
-                android:key="min_network_accuracy"
+                android:key="min_location_network_accuracy"
                 android:persistent="true"
+                android:inputType="number"
                 android:summary="Desired network accuracy in meters (default = 1500). 0 keeps network triangulation always on."
                 android:title="Network accuracy" />
             <EditTextPreference
                 android:defaultValue="300"
-                android:key="expiration_time"
+                android:dependency="status_location_gps"
+                android:key="location_expiration_time"
                 android:persistent="true"
-                android:summary="How long until last location is outdated in seconds (default = 300)"
-                android:title="Location expiration time" />
+                android:inputType="number"
+                android:summary="300 seconds"
+                android:title="Location expires after..." />
         </PreferenceScreen>
         <PreferenceScreen
             android:key="light"
@@ -271,6 +299,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_light"
+                android:inputType="number"
                 android:key="frequency_light"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -289,6 +318,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_linear_accelerometer"
+                android:inputType="number"
                 android:key="frequency_linear_accelerometer"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -300,7 +330,7 @@
             android:title="Network" >
             <CheckBoxPreference
                 android:defaultValue="false"
-                android:key="status_network"
+                android:key="status_network_events"
                 android:persistent="true"
                 android:summary="Network usage states"
                 android:title="Network events" />
@@ -313,9 +343,10 @@
 
             <EditTextPreference
                 android:defaultValue="60"
-                android:key="frequency_traffic"
+                android:inputType="number"
+                android:key="frequency_network_traffic"
                 android:persistent="true"
-                android:summary="X in seconds (default = 60 seconds)"
+                android:summary="60 seconds"
                 android:title="Network traffic update frequency" />
         </PreferenceScreen>
         <PreferenceScreen
@@ -331,6 +362,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_magnetometer"
+                android:inputType="number"
                 android:key="frequency_magnetometer"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -349,13 +381,14 @@
             <EditTextPreference
                 android:defaultValue="10"
                 android:dependency="status_processor"
+                android:inputType="number"
                 android:key="frequency_processor"
                 android:persistent="true"
-                android:summary="X in seconds (default = 10)"
+                android:summary="10 seconds"
                 android:title="Update frequency" />
         </PreferenceScreen>
         <PreferenceScreen
-            android:key="timeZone"
+            android:key="timezone"
             android:summary="Tracks user&apos;s current timezone"
             android:title="Timezone" >
             <CheckBoxPreference
@@ -367,9 +400,10 @@
             <EditTextPreference
                 android:defaultValue="3600"
                 android:dependency="status_timezone"
+                android:inputType="number"
                 android:key="frequency_timezone"
                 android:persistent="true"
-                android:summary="X in seconds (default = 3600)"
+                android:summary="3600 seconds"
                 android:title="Update frequency" />
         </PreferenceScreen>
         <PreferenceScreen
@@ -385,6 +419,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_proximity"
+                android:inputType="number"
                 android:key="frequency_proximity"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -403,6 +438,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_rotation"
+                android:inputType="number"
                 android:key="frequency_rotation"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -433,6 +469,7 @@
             <EditTextPreference
                 android:defaultValue="200000"
                 android:dependency="status_temperature"
+                android:inputType="number"
                 android:key="frequency_temperature"
                 android:persistent="true"
                 android:summary="Delay in microseconds between samples: 0 (fastest), 20000 (game), 60000 (UI), 200000 (normal)"
@@ -461,10 +498,11 @@
             <EditTextPreference
                 android:defaultValue="60"
                 android:dependency="status_wifi"
+                android:inputType="number"
                 android:key="frequency_wifi"
                 android:persistent="true"
-                android:summary="X in seconds (default = 60)"
-                android:title="WiFi scanning update frequency" />
+                android:summary="60 seconds"
+                android:title="Wi-Fi scanning update frequency" />
         </PreferenceScreen>
     </PreferenceCategory>
     <PreferenceCategory
@@ -473,8 +511,8 @@
         android:title="Context exchange protocols" >
         <PreferenceScreen
             android:key="mqtt"
-            android:summary="MQTT Device ID:"
-            android:title="AWARE Server MQTT" >
+            android:summary="Allows remove questionnaires, P2P context exchange"
+            android:title="AWARE MQTT Server" >
             <CheckBoxPreference
                 android:defaultValue="false"
                 android:key="status_mqtt"
@@ -488,9 +526,10 @@
                 android:title="AWARE Server MQTT server" />
             <EditTextPreference
                 android:defaultValue="1883"
+                android:inputType="number"
                 android:key="mqtt_port"
                 android:persistent="true"
-                android:summary="Connection port (default = 1883)"
+                android:summary="1883"
                 android:title="MQTT port" />
             <EditTextPreference
                 android:key="mqtt_username"
@@ -505,20 +544,29 @@
                 android:title="MQTT password" />
             <EditTextPreference
                 android:defaultValue="600"
+                android:inputType="number"
                 android:key="mqtt_keep_alive"
                 android:persistent="true"
-                android:summary="X seconds to keep alive (default = 600)"
+                android:summary="600 seconds"
                 android:title="MQTT keep alive" />
             <EditTextPreference
                 android:defaultValue="2"
+                android:inputType="number"
                 android:key="mqtt_qos"
                 android:persistent="true"
                 android:summary="0 - No guarantee, 1 - At least once, 2 - Exactly once (default = 2)"
                 android:title="MQTT QoS" />
+            <EditTextPreference
+                android:defaultValue="tcp"
+                android:key="mqtt_protocol"
+                android:persistent="true"
+                android:summary="tcp"
+                android:title="Connection protocol (tcp/ssl)" />
         </PreferenceScreen>
         <PreferenceScreen
             android:key="webservice"
-            android:title="AWARE Server Webservices" >
+            android:summary="Join research studies, sync data"
+            android:title="AWARE Webservices Server" >
             <CheckBoxPreference
                 android:defaultValue="false"
                 android:key="status_webservice"
@@ -526,10 +574,9 @@
                 android:title="Active" />
 
             <EditTextPreference
-                android:defaultValue="http://www.server.com/index.php/aware/index"
                 android:key="webservice_server"
                 android:persistent="true"
-                android:summary="URL/IP address (ex. http://www.server.com/index.php/aware/index)"
+                android:summary="URL/IP address"
                 android:title="AWARE Server Webservice" />
 
             <CheckBoxPreference
@@ -540,11 +587,21 @@
                 android:title="Wi-Fi only" />
 
             <EditTextPreference
-                android:defaultValue="5"
+                android:defaultValue="30"
+                android:inputType="number"
                 android:key="frequency_webservice"
                 android:persistent="true"
-                android:summary="How often the data is synchronised with the webservices?"
+                android:summary="30 minutes"
                 android:title="Upload frequency (in minutes, 0 to disable)." />
+
+            <ListPreference
+                android:defaultValue="0"
+                android:entries="@array/clean_old_data_readable"
+                android:entryValues="@array/clean_old_data_values"
+                android:key="frequency_clean_old_data"
+                android:persistent="true"
+                android:summary="How frequently to clean old data?"
+                android:title="Clean old data?" />
         </PreferenceScreen>
     </PreferenceCategory>
 

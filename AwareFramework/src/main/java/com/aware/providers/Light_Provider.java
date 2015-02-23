@@ -42,7 +42,7 @@ public class Light_Provider extends ContentProvider {
 	/**
 	 * Authority of content provider
 	 */
-	public static final String AUTHORITY = "com.aware.provider.light";
+	public static String AUTHORITY = "com.aware.provider.light";
 
 	// ContentProvider query paths
 	private static final int SENSOR_DEV = 1;
@@ -134,13 +134,25 @@ public class Light_Provider extends ContentProvider {
 	private static DatabaseHelper databaseHelper = null;
 	private static SQLiteDatabase database = null;
 
+	private boolean initializeDB() {
+        if (databaseHelper == null) {
+            databaseHelper = new DatabaseHelper( getContext(), DATABASE_NAME, null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS );
+        }
+        if( databaseHelper != null && ( database == null || ! database.isOpen() )) {
+            database = databaseHelper.getWritableDatabase();
+        }
+        return( database != null && databaseHelper != null);
+    }
+	
 	/**
 	 * Delete entry from the database
 	 */
 	@Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
 
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
@@ -182,8 +194,10 @@ public class Light_Provider extends ContentProvider {
 	 */
 	@Override
 	public Uri insert(Uri uri, ContentValues initialValues) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		ContentValues values = (initialValues != null) ? new ContentValues(
 				initialValues) : new ContentValues();
@@ -220,44 +234,40 @@ public class Light_Provider extends ContentProvider {
 
 	@Override
 	public boolean onCreate() {
-		if (databaseHelper == null)
-			databaseHelper = new DatabaseHelper(getContext(), DATABASE_NAME,
-					null, DATABASE_VERSION, DATABASE_TABLES, TABLES_FIELDS);
-		database = databaseHelper.getWritableDatabase();
-		return (databaseHelper != null);
-	}
+	    AUTHORITY = getContext().getPackageName() + ".provider.light";
+	    
+	    sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
+        sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[0],
+                SENSOR_DEV);
+        sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
+                SENSOR_DEV_ID);
+        sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[1],
+                SENSOR_DATA);
+        sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#",
+                SENSOR_DATA_ID);
 
-	static {
-		sUriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
-		sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[0],
-				SENSOR_DEV);
-		sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[0] + "/#",
-				SENSOR_DEV_ID);
-		sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[1],
-				SENSOR_DATA);
-		sUriMatcher.addURI(Light_Provider.AUTHORITY, DATABASE_TABLES[1] + "/#",
-				SENSOR_DATA_ID);
+        sensorMap = new HashMap<String, String>();
+        sensorMap.put(Light_Sensor._ID, Light_Sensor._ID);
+        sensorMap.put(Light_Sensor.TIMESTAMP, Light_Sensor.TIMESTAMP);
+        sensorMap.put(Light_Sensor.DEVICE_ID, Light_Sensor.DEVICE_ID);
+        sensorMap.put(Light_Sensor.MAXIMUM_RANGE, Light_Sensor.MAXIMUM_RANGE);
+        sensorMap.put(Light_Sensor.MINIMUM_DELAY, Light_Sensor.MINIMUM_DELAY);
+        sensorMap.put(Light_Sensor.NAME, Light_Sensor.NAME);
+        sensorMap.put(Light_Sensor.POWER_MA, Light_Sensor.POWER_MA);
+        sensorMap.put(Light_Sensor.RESOLUTION, Light_Sensor.RESOLUTION);
+        sensorMap.put(Light_Sensor.TYPE, Light_Sensor.TYPE);
+        sensorMap.put(Light_Sensor.VENDOR, Light_Sensor.VENDOR);
+        sensorMap.put(Light_Sensor.VERSION, Light_Sensor.VERSION);
 
-		sensorMap = new HashMap<String, String>();
-		sensorMap.put(Light_Sensor._ID, Light_Sensor._ID);
-		sensorMap.put(Light_Sensor.TIMESTAMP, Light_Sensor.TIMESTAMP);
-		sensorMap.put(Light_Sensor.DEVICE_ID, Light_Sensor.DEVICE_ID);
-		sensorMap.put(Light_Sensor.MAXIMUM_RANGE, Light_Sensor.MAXIMUM_RANGE);
-		sensorMap.put(Light_Sensor.MINIMUM_DELAY, Light_Sensor.MINIMUM_DELAY);
-		sensorMap.put(Light_Sensor.NAME, Light_Sensor.NAME);
-		sensorMap.put(Light_Sensor.POWER_MA, Light_Sensor.POWER_MA);
-		sensorMap.put(Light_Sensor.RESOLUTION, Light_Sensor.RESOLUTION);
-		sensorMap.put(Light_Sensor.TYPE, Light_Sensor.TYPE);
-		sensorMap.put(Light_Sensor.VENDOR, Light_Sensor.VENDOR);
-		sensorMap.put(Light_Sensor.VERSION, Light_Sensor.VERSION);
-
-		sensorDataMap = new HashMap<String, String>();
-		sensorDataMap.put(Light_Data._ID, Light_Data._ID);
-		sensorDataMap.put(Light_Data.TIMESTAMP, Light_Data.TIMESTAMP);
-		sensorDataMap.put(Light_Data.DEVICE_ID, Light_Data.DEVICE_ID);
-		sensorDataMap.put(Light_Data.LIGHT_LUX, Light_Data.LIGHT_LUX);
-		sensorDataMap.put(Light_Data.ACCURACY, Light_Data.ACCURACY);
-		sensorDataMap.put(Light_Data.LABEL, Light_Data.LABEL);
+        sensorDataMap = new HashMap<String, String>();
+        sensorDataMap.put(Light_Data._ID, Light_Data._ID);
+        sensorDataMap.put(Light_Data.TIMESTAMP, Light_Data.TIMESTAMP);
+        sensorDataMap.put(Light_Data.DEVICE_ID, Light_Data.DEVICE_ID);
+        sensorDataMap.put(Light_Data.LIGHT_LUX, Light_Data.LIGHT_LUX);
+        sensorDataMap.put(Light_Data.ACCURACY, Light_Data.ACCURACY);
+        sensorDataMap.put(Light_Data.LABEL, Light_Data.LABEL);
+	    
+		return true;
 	}
 
 	/**
@@ -266,8 +276,11 @@ public class Light_Provider extends ContentProvider {
 	@Override
 	public Cursor query(Uri uri, String[] projection, String selection,
 			String[] selectionArgs, String sortOrder) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+	    
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return null;
+        }
 
 		SQLiteQueryBuilder qb = new SQLiteQueryBuilder();
 		switch (sUriMatcher.match(uri)) {
@@ -302,8 +315,12 @@ public class Light_Provider extends ContentProvider {
 	@Override
 	public int update(Uri uri, ContentValues values, String selection,
 			String[] selectionArgs) {
-		if (database == null || !database.isOpen())
-			database = databaseHelper.getWritableDatabase();
+
+	    if( ! initializeDB() ) {
+            Log.w(AUTHORITY,"Database unavailable...");
+            return 0;
+        }
+
 		int count = 0;
 		switch (sUriMatcher.match(uri)) {
 		case SENSOR_DEV:

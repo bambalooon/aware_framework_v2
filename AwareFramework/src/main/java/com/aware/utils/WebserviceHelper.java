@@ -43,8 +43,11 @@ public class WebserviceHelper extends IntentService {
 	public static final String EXTRA_FIELDS = "fields";
 	public static final String EXTRA_CONTENT_URI = "uri";
 
-	private String WEBSERVER = "";
-	private String DEVICE_ID = "";
+	private String WEBSERVER;
+	private String DEVICE_ID;
+	private String DATABASE_TABLE;
+	private String TABLES_FIELDS;
+	private Uri CONTENT_URI;
 	private boolean DEBUG = false;
 	
 	public WebserviceHelper() {
@@ -61,14 +64,20 @@ public class WebserviceHelper extends IntentService {
 	@Override
 	protected void onHandleIntent(Intent intent) {
 		
-		WEBSERVER = Aware.getSetting(getContentResolver(), Aware_Preferences.WEBSERVICE_SERVER);
-		DEVICE_ID = Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID);
-		DEBUG = Aware.getSetting(getContentResolver(), Aware_Preferences.DEBUG_FLAG).equals("true");
+		WEBSERVER = Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_SERVER);
+		DEVICE_ID = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID);
+		DEBUG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_FLAG).equals("true");
+		DATABASE_TABLE = intent.getStringExtra(EXTRA_TABLE);
+		TABLES_FIELDS = intent.getStringExtra(EXTRA_FIELDS);
+		CONTENT_URI = Uri.parse(intent.getStringExtra(EXTRA_CONTENT_URI));
+		
+		//Fixed: not using webservices
+		if( WEBSERVER.length() == 0 ) return;
 		
 		if( intent.getAction().equals(ACTION_AWARE_WEBSERVICE_SYNC_TABLE) ) {
 			
 			//Check if we should do this only over Wi-Fi
-			boolean wifi_only = Aware.getSetting(getContentResolver(), Aware_Preferences.WEBSERVICE_WIFI_ONLY).equals("true");
+			boolean wifi_only = Aware.getSetting(getApplicationContext(), Aware_Preferences.WEBSERVICE_WIFI_ONLY).equals("true");
 			if( wifi_only ) {
 				ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
 				NetworkInfo active_network = cm.getActiveNetworkInfo();
@@ -80,23 +89,18 @@ public class WebserviceHelper extends IntentService {
 				}
 			}
 			
-			String DATABASE_TABLE = intent.getStringExtra(EXTRA_TABLE);
-			String TABLES_FIELDS = intent.getStringExtra(EXTRA_FIELDS);
-			Uri CONTENT_URI = Uri.parse(intent.getStringExtra(EXTRA_CONTENT_URI));
-			
 			//Check first if we have database table remotely, otherwise create it!
 			ArrayList<NameValuePair> fields = new ArrayList<NameValuePair>();
     		fields.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, DEVICE_ID));
     		fields.add(new BasicNameValuePair(EXTRA_FIELDS, TABLES_FIELDS));
     		
     		//Create table if doesn't exist on the remote webservice server
-    		HttpResponse response = new Http().dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/create_table", fields);
+    		HttpResponse response = new Https(getApplicationContext()).dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/create_table", fields);
     		if( response != null && response.getStatusLine().getStatusCode() == 200 ) {
-    		    
     		    if( DEBUG ) {
                     HttpResponse copy = response;
                     try {
-                        Log.d(Aware.TAG, EntityUtils.toString(copy.getEntity()));
+                        if( DEBUG ) Log.d(Aware.TAG, EntityUtils.toString(copy.getEntity()));
                     } catch (ParseException e) {
                         e.printStackTrace();
                     } catch (IOException e) {
@@ -108,6 +112,7 @@ public class WebserviceHelper extends IntentService {
     			Cursor columnsDB = getContentResolver().query(CONTENT_URI, null, null, null, null);
     			if(columnsDB != null && columnsDB.moveToFirst()) {
     				columnsStr = columnsDB.getColumnNames();
+    				if( DEBUG ) Log.d(Aware.TAG, "Total records on " + DATABASE_TABLE + ": " + columnsDB.getCount());
     			}
     			if( columnsDB != null && ! columnsDB.isClosed() ) columnsDB.close();
     			
@@ -116,47 +121,58 @@ public class WebserviceHelper extends IntentService {
     				request.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, DEVICE_ID));
     				
     				//check the latest entry in remote database
-    				HttpResponse latest = new Http().dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/latest", request);
+    				HttpResponse latest = new Https(getApplicationContext()).dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/latest", request);
     				if( latest == null ) return;
     				
-    				String data = EntityUtils.toString(latest.getEntity());
+    				String data = "[]";
+    				try {
+    				    data = EntityUtils.toString(latest.getEntity());
+    				} catch( IllegalStateException e ) {
+    				    Log.d(Aware.TAG,"Unable to connect to webservices...");
+    				}
+    				 
     				if( DEBUG ) { 
     					Log.d(Aware.TAG,"Webservice response: " + data );
     				}
     				
-    				Cursor context_data = null;
+    				//If in a study, get from joined date onwards
+    				String study_condition = "";
+					if( Aware.getSetting(getApplicationContext(), "study_id").length() > 0 && Aware.getSetting(getApplicationContext(), "study_start").length() > 0 ) {
+						String study_start = Aware.getSetting(getApplicationContext(), "study_start");
+						study_condition = " AND timestamp > " + Long.parseLong(study_start);
+					}
+					if( DATABASE_TABLE.equalsIgnoreCase("aware_device") ) study_condition = "";
     				
 					JSONArray remoteData = new JSONArray(data);
+					
+					Cursor context_data;
 					if( remoteData.length() == 0 ) {
 						if( exists(columnsStr, "double_end_timestamp") ) {
-							context_data = getContentResolver().query(CONTENT_URI, null, "double_end_timestamp != 0", null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "double_end_timestamp != 0" + study_condition, null, "timestamp ASC");
 						} else if (exists(columnsStr, "double_esm_user_answer_timestamp")) {
-							context_data = getContentResolver().query(CONTENT_URI, null, "double_esm_user_answer_timestamp != 0", null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "double_esm_user_answer_timestamp != 0" + study_condition, null, "timestamp ASC");
 						} else {
-							context_data = getContentResolver().query(CONTENT_URI, null, null, null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "1" + study_condition, null, "timestamp ASC");
 						}
 					} else {
 						long last = 0;
-						
 						if ( exists(columnsStr, "double_end_timestamp") ) {
 							last = remoteData.getJSONObject(0).getLong("double_end_timestamp");
-							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last + " AND double_end_timestamp != 0", null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last + " AND double_end_timestamp != 0" + study_condition, null, "timestamp ASC");
 						} else if( exists(columnsStr, "double_esm_user_answer_timestamp") ) {
 							last = remoteData.getJSONObject(0).getLong("double_esm_user_answer_timestamp");
-							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last + " AND double_esm_user_answer_timestamp != 0", null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last + " AND double_esm_user_answer_timestamp != 0" + study_condition, null, "timestamp ASC");
 						} else {
 							last = remoteData.getJSONObject(0).getLong("timestamp");
-							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last, null, "timestamp ASC");
+							context_data = getContentResolver().query(CONTENT_URI, null, "timestamp > " + last + study_condition, null, "timestamp ASC");
 						}
 					}
 					
 					JSONArray context_data_entries = new JSONArray();
-					
 					if( context_data != null && context_data.moveToFirst() ) {
 						if( DEBUG ) Log.d(Aware.TAG, "Uploading " + context_data.getCount() + " from " + DATABASE_TABLE);
 						
 						do {
-							
 							JSONObject entry = new JSONObject();
 							
 							String[] columns = context_data.getColumnNames();
@@ -185,7 +201,7 @@ public class WebserviceHelper extends IntentService {
 								request = new ArrayList<NameValuePair>();
 								request.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, DEVICE_ID));
 								request.add(new BasicNameValuePair("data", context_data_entries.toString()));
-								new Http().dataPOST( WEBSERVER + "/" + DATABASE_TABLE + "/insert", request);
+								new Https(getApplicationContext()).dataPOST( WEBSERVER + "/" + DATABASE_TABLE + "/insert", request);
 								
 								context_data_entries = new JSONArray();
 							}
@@ -195,10 +211,10 @@ public class WebserviceHelper extends IntentService {
 							request = new ArrayList<NameValuePair>();
 							request.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, DEVICE_ID));
 							request.add(new BasicNameValuePair("data", context_data_entries.toString()));
-							new Http().dataPOST( WEBSERVER + "/" + DATABASE_TABLE+"/insert", request);
+							new Https(getApplicationContext()).dataPOST( WEBSERVER + "/" + DATABASE_TABLE + "/insert", request);
 						}
 					} else {
-						if( DEBUG ) Log.d(Aware.TAG, "Nothing new in " + DATABASE_TABLE +"!" );
+						if( DEBUG ) Log.d(Aware.TAG, "Nothing new in " + DATABASE_TABLE +"!" + " URI=" + CONTENT_URI.toString() );
 					}
 					
 					if( context_data != null && ! context_data.isClosed() ) context_data.close();
@@ -215,11 +231,9 @@ public class WebserviceHelper extends IntentService {
 		
 		//Clear database table remotely
 		if( intent.getAction().equals(ACTION_AWARE_WEBSERVICE_CLEAR_TABLE) ) {
-			String DATABASE_TABLE = intent.getStringExtra(EXTRA_TABLE);
-			
 			ArrayList<NameValuePair> request = new ArrayList<NameValuePair>();
     		request.add(new BasicNameValuePair(Aware_Preferences.DEVICE_ID, DEVICE_ID));
-    		new Http().dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/clear_table", request);
+    		new Https(getApplicationContext()).dataPOST(WEBSERVER + "/" + DATABASE_TABLE + "/clear_table", request);
 		}
 	}
 }

@@ -60,9 +60,12 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
     
     /**
      * Broadcasted event: new accelerometer values
-     * ContentProvider: Accelerometer_Provider
+     * extra: context (ContentValues)
+     * extra: sensor (ContentValues)
      */
     public static final String ACTION_AWARE_ACCELEROMETER = "ACTION_AWARE_ACCELEROMETER";
+    public static final String EXTRA_SENSOR = "sensor";
+    public static final String EXTRA_DATA = "data";
     
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -72,7 +75,7 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         ContentValues rowData = new ContentValues();
-        rowData.put(Accelerometer_Data.DEVICE_ID, Aware.getSetting(getContentResolver(), Aware_Preferences.DEVICE_ID));
+        rowData.put(Accelerometer_Data.DEVICE_ID, Aware.getSetting(getApplicationContext(), Aware_Preferences.DEVICE_ID));
         rowData.put(Accelerometer_Data.TIMESTAMP, System.currentTimeMillis());
         rowData.put(Accelerometer_Data.VALUES_0, event.values[0]);
         rowData.put(Accelerometer_Data.VALUES_1, event.values[1]);
@@ -80,12 +83,15 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
         rowData.put(Accelerometer_Data.ACCURACY, event.accuracy);
         
         try {
-            getContentResolver().insert(Accelerometer_Data.CONTENT_URI, rowData);
+        	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+        		getContentResolver().insert(Accelerometer_Data.CONTENT_URI, rowData);
+        	}
             
             Intent accelData = new Intent(ACTION_AWARE_ACCELEROMETER);
+            accelData.putExtra(EXTRA_DATA, rowData);
             sendBroadcast(accelData);
             
-            if( Aware.DEBUG ) Log.d(TAG, "Accelerometer:"+ rowData.toString());
+            if( Aware.DEBUG ) Log.d(TAG, "Accelerometer: "+ rowData.toString());
         }catch( SQLiteException e ) {
             if(Aware.DEBUG) Log.d(TAG,e.getMessage());
         }catch( SQLException e ) {
@@ -97,7 +103,7 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
         Cursor accelInfo = getContentResolver().query(Accelerometer_Sensor.CONTENT_URI, null, null, null, null);
         if( accelInfo == null || ! accelInfo.moveToFirst() ) {
             ContentValues rowData = new ContentValues();
-            rowData.put(Accelerometer_Sensor.DEVICE_ID, Aware.getSetting(getContentResolver(),"device_id"));
+            rowData.put(Accelerometer_Sensor.DEVICE_ID, Aware.getSetting(getApplicationContext(),Aware_Preferences.DEVICE_ID));
             rowData.put(Accelerometer_Sensor.TIMESTAMP, System.currentTimeMillis());
             rowData.put(Accelerometer_Sensor.MAXIMUM_RANGE, acc.getMaximumRange());
             rowData.put(Accelerometer_Sensor.MINIMUM_DELAY, acc.getMinDelay());
@@ -109,8 +115,15 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
             rowData.put(Accelerometer_Sensor.VERSION, acc.getVersion());
             
             try {
-                getContentResolver().insert(Accelerometer_Sensor.CONTENT_URI, rowData);
-                if( Aware.DEBUG ) Log.d(TAG, "Accelerometer device:"+ rowData.toString());
+            	if( Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_DB_SLOW).equals("false") ) {
+            		getContentResolver().insert(Accelerometer_Sensor.CONTENT_URI, rowData);
+            	}
+            	
+            	Intent accel_dev = new Intent(ACTION_AWARE_ACCELEROMETER);
+            	accel_dev.putExtra(EXTRA_SENSOR, rowData);
+            	sendBroadcast(accel_dev);
+            	
+            	if( Aware.DEBUG ) Log.d(TAG, "Accelerometer device:"+ rowData.toString());
             }catch( SQLiteException e ) {
                 if(Aware.DEBUG) Log.d(TAG,e.getMessage());
             }catch( SQLException e ) {
@@ -132,12 +145,12 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
             stopSelf();
         }
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
         }catch ( NumberFormatException e) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_ACCELEROMETER, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_ACCELEROMETER, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_ACCELEROMETER));
         }
         
         DATABASE_TABLES = Accelerometer_Provider.DATABASE_TABLES;
@@ -174,18 +187,17 @@ public class Accelerometer extends Aware_Sensor implements SensorEventListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         
-        TAG = Aware.getSetting(getContentResolver(),"debug_tag").length()>0?Aware.getSetting(getContentResolver(),"debug_tag"):TAG;
+        TAG = Aware.getSetting(getApplicationContext(), Aware_Preferences.DEBUG_TAG).length()>0?Aware.getSetting(getApplicationContext(),Aware_Preferences.DEBUG_TAG):TAG;
         try {
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
+        	if( SENSOR_DELAY != Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_ACCELEROMETER))) { //changed parameters
+        		sensorHandler.removeCallbacksAndMessages(null);
+                mSensorManager.unregisterListener(this, mAccelerometer);
+                mSensorManager.registerListener(this, mAccelerometer, Integer.parseInt(Aware.getSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_ACCELEROMETER)), sensorHandler);
+        	}
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
         }catch ( NumberFormatException e) {
-            Aware.setSetting(getContentResolver(), Aware_Preferences.FREQUENCY_ACCELEROMETER, 200000);
-            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getContentResolver(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
-        }
-        
-        if(intent.getBooleanExtra("refresh", false)) {
-            sensorHandler.removeCallbacksAndMessages(null);
-            mSensorManager.unregisterListener(this, mAccelerometer);
-            mSensorManager.registerListener(this, mAccelerometer, SENSOR_DELAY, sensorHandler);
+            Aware.setSetting(getApplicationContext(), Aware_Preferences.FREQUENCY_ACCELEROMETER, 200000);
+            SENSOR_DELAY = Integer.parseInt(Aware.getSetting(getApplicationContext(),Aware_Preferences.FREQUENCY_ACCELEROMETER));
         }
         
         if(Aware.DEBUG) Log.d(TAG,"Accelerometer service active...");
