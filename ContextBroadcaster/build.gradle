@@ -28,4 +28,5 @@ dependencies {
     compile fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
     compile project(':AwareFramework')
     compile project(':AwareFrameworkCDM')
+    compile project(':Google_ActivityRecognition')
 }
